@@ -1,0 +1,12 @@
+2025-01-24 22:27:47,683 - INFO - Script started.
+2025-01-24 22:27:47,683 - INFO - Created output directory: C:\Users\Sabbo\LifeDrawingGallery\Converted
+2025-01-24 22:27:49,690 - ERROR - Missing dependencies: pydds, tqdm
+2025-01-24 22:28:32,843 - ERROR - Missing dependencies: pydds, tqdm
+2025-01-24 22:29:49,586 - ERROR - Missing dependencies: pydds, tqdm
+2025-01-24 22:34:11,195 - ERROR - Missing dependencies: pydds, tqdm
+2025-01-24 22:41:50,411 - INFO - Script ended.
+2025-01-24 22:41:52,328 - ERROR - Missing dependencies: pydds, tqdm
+2025-01-24 22:42:22,083 - INFO - Script started.
+2025-01-24 22:42:23,348 - ERROR - Missing dependencies: pydds
+2025-01-24 22:49:50,390 - INFO - Script started.
+2025-01-24 22:49:51,556 - ERROR - Missing dependencies: pydds
