@@ -1,0 +1,359 @@
+[
+    {
+        "filename": "56676551ddbf4ce9b2852af9bda145e0.jpg",
+        "original_dimensions": {
+            "width": 1920,
+            "height": 1080
+        },
+        "original_aspect_ratio": 1.78,
+        "bounding_box": {
+            "left": 472,
+            "top": 48,
+            "right": 1448,
+            "bottom": 1032
+        },
+        "bounding_box_dimensions": {
+            "width": 976,
+            "height": 984
+        },
+        "bounding_box_aspect_ratio": 0.99,
+        "has_significant_borders": true,
+        "category": "portrait"
+    },
+    {
+        "filename": "7718be98b4d84d6ca748255263fb7926.jpg",
+        "original_dimensions": {
+            "width": 1041,
+            "height": 1029
+        },
+        "original_aspect_ratio": 1.01,
+        "bounding_box": {
+            "left": 0,
+            "top": 0,
+            "right": 1039,
+            "bottom": 1029
+        },
+        "bounding_box_dimensions": {
+            "width": 1039,
+            "height": 1029
+        },
+        "bounding_box_aspect_ratio": 1.01,
+        "has_significant_borders": false,
+        "category": "landscape"
+    },
+    {
+        "filename": "b3f23f83454ec776c50e626327e03f86.png",
+        "original_dimensions": {
+            "width": 1080,
+            "height": 1920
+        },
+        "original_aspect_ratio": 0.56,
+        "bounding_box": {
+            "left": 56,
+            "top": 0,
+            "right": 1032,
+            "bottom": 1920
+        },
+        "bounding_box_dimensions": {
+            "width": 976,
+            "height": 1920
+        },
+        "bounding_box_aspect_ratio": 0.51,
+        "has_significant_borders": true,
+        "category": "portrait"
+    },
+    {
+        "filename": "VRChat_2024-11-29_00-21-20.985_1920x1080.png",
+        "original_dimensions": {
+            "width": 1080,
+            "height": 1920
+        },
+        "original_aspect_ratio": 0.56,
+        "bounding_box": {
+            "left": 146,
+            "top": 408,
+            "right": 934,
+            "bottom": 1512
+        },
+        "bounding_box_dimensions": {
+            "width": 788,
+            "height": 1104
+        },
+        "bounding_box_aspect_ratio": 0.71,
+        "has_significant_borders": true,
+        "category": "portrait"
+    },
+    {
+        "filename": "VRChat_2024-12-14_01-40-12.080_1080x1920.png",
+        "original_dimensions": {
+            "width": 1080,
+            "height": 1920
+        },
+        "original_aspect_ratio": 0.56,
+        "bounding_box": {
+            "left": 0,
+            "top": 125,
+            "right": 1080,
+            "bottom": 1795
+        },
+        "bounding_box_dimensions": {
+            "width": 1080,
+            "height": 1670
+        },
+        "bounding_box_aspect_ratio": 0.65,
+        "has_significant_borders": true,
+        "category": "portrait"
+    },
+    {
+        "filename": "VRChat_2024-12-17_20-35-10.317_1920x1080.png",
+        "original_dimensions": {
+            "width": 1920,
+            "height": 1080
+        },
+        "original_aspect_ratio": 1.78,
+        "bounding_box": {
+            "left": 383,
+            "top": 0,
+            "right": 1537,
+            "bottom": 1080
+        },
+        "bounding_box_dimensions": {
+            "width": 1154,
+            "height": 1080
+        },
+        "bounding_box_aspect_ratio": 1.07,
+        "has_significant_borders": true,
+        "category": "landscape"
+    },
+    {
+        "filename": "VRChat_2024-12-17_23-49-01.322_1920x1080.png",
+        "original_dimensions": {
+            "width": 1920,
+            "height": 1080
+        },
+        "original_aspect_ratio": 1.78,
+        "bounding_box": {
+            "left": 471,
+            "top": 51,
+            "right": 1449,
+            "bottom": 1029
+        },
+        "bounding_box_dimensions": {
+            "width": 978,
+            "height": 978
+        },
+        "bounding_box_aspect_ratio": 1.0,
+        "has_significant_borders": true,
+        "category": "portrait"
+    },
+    {
+        "filename": "VRChat_2024-12-19_00-26-06.415_1920x1080.png",
+        "original_dimensions": {
+            "width": 1080,
+            "height": 1920
+        },
+        "original_aspect_ratio": 0.56,
+        "bounding_box": {
+            "left": 69,
+            "top": 300,
+            "right": 1012,
+            "bottom": 1620
+        },
+        "bounding_box_dimensions": {
+            "width": 943,
+            "height": 1320
+        },
+        "bounding_box_aspect_ratio": 0.71,
+        "has_significant_borders": true,
+        "category": "portrait"
+    },
+    {
+        "filename": "VRChat_2024-12-23_09-37-57.446_1920x1080.png",
+        "original_dimensions": {
+            "width": 1920,
+            "height": 1080
+        },
+        "original_aspect_ratio": 1.78,
+        "bounding_box": {
+            "left": 478,
+            "top": 58,
+            "right": 1442,
+            "bottom": 1022
+        },
+        "bounding_box_dimensions": {
+            "width": 964,
+            "height": 964
+        },
+        "bounding_box_aspect_ratio": 1.0,
+        "has_significant_borders": true,
+        "category": "portrait"
+    },
+    {
+        "filename": "VRChat_2024-12-24_00-00-59.351_1440x2560.png",
+        "original_dimensions": {
+            "width": 1440,
+            "height": 2560
+        },
+        "original_aspect_ratio": 0.56,
+        "bounding_box": {
+            "left": 0,
+            "top": 217,
+            "right": 1440,
+            "bottom": 2343
+        },
+        "bounding_box_dimensions": {
+            "width": 1440,
+            "height": 2126
+        },
+        "bounding_box_aspect_ratio": 0.68,
+        "has_significant_borders": true,
+        "category": "portrait"
+    },
+    {
+        "filename": "VRChat_2024-12-27_10-43-47.421_1920x1080.png",
+        "original_dimensions": {
+            "width": 1920,
+            "height": 1080
+        },
+        "original_aspect_ratio": 1.78,
+        "bounding_box": {
+            "left": 276,
+            "top": 52,
+            "right": 1644,
+            "bottom": 1028
+        },
+        "bounding_box_dimensions": {
+            "width": 1368,
+            "height": 976
+        },
+        "bounding_box_aspect_ratio": 1.4,
+        "has_significant_borders": true,
+        "category": "landscape"
+    },
+    {
+        "filename": "VRChat_2024-12-27_20-14-22.599_3840x2160.png",
+        "original_dimensions": {
+            "width": 3840,
+            "height": 2160
+        },
+        "original_aspect_ratio": 1.78,
+        "bounding_box": {
+            "left": 818,
+            "top": 0,
+            "right": 3022,
+            "bottom": 2160
+        },
+        "bounding_box_dimensions": {
+            "width": 2204,
+            "height": 2160
+        },
+        "bounding_box_aspect_ratio": 1.02,
+        "has_significant_borders": true,
+        "category": "landscape"
+    },
+    {
+        "filename": "VRChat_2025-01-04_02-51-58.694_1920x1080.png",
+        "original_dimensions": {
+            "width": 921,
+            "height": 1290
+        },
+        "original_aspect_ratio": 0.71,
+        "bounding_box": {
+            "left": 0,
+            "top": 0,
+            "right": 921,
+            "bottom": 1290
+        },
+        "bounding_box_dimensions": {
+            "width": 921,
+            "height": 1290
+        },
+        "bounding_box_aspect_ratio": 0.71,
+        "has_significant_borders": false,
+        "category": "portrait"
+    },
+    {
+        "filename": "VRChat_2025-01-07_18-26-36.388_1920x1080.png",
+        "original_dimensions": {
+            "width": 1920,
+            "height": 1080
+        },
+        "original_aspect_ratio": 1.78,
+        "bounding_box": {
+            "left": 436,
+            "top": 16,
+            "right": 1484,
+            "bottom": 1064
+        },
+        "bounding_box_dimensions": {
+            "width": 1048,
+            "height": 1048
+        },
+        "bounding_box_aspect_ratio": 1.0,
+        "has_significant_borders": true,
+        "category": "portrait"
+    },
+    {
+        "filename": "VRChat_2025-01-11_20-46-43.985_2560x1440.png",
+        "original_dimensions": {
+            "width": 2560,
+            "height": 1440
+        },
+        "original_aspect_ratio": 1.78,
+        "bounding_box": {
+            "left": 0,
+            "top": 79,
+            "right": 2560,
+            "bottom": 1361
+        },
+        "bounding_box_dimensions": {
+            "width": 2560,
+            "height": 1282
+        },
+        "bounding_box_aspect_ratio": 2.0,
+        "has_significant_borders": true,
+        "category": "landscape"
+    },
+    {
+        "filename": "VRChat_2025-01-13_23-20-11.291_1920x1080.png",
+        "original_dimensions": {
+            "width": 1920,
+            "height": 1080
+        },
+        "original_aspect_ratio": 1.78,
+        "bounding_box": {
+            "left": 460,
+            "top": 40,
+            "right": 1460,
+            "bottom": 1040
+        },
+        "bounding_box_dimensions": {
+            "width": 1000,
+            "height": 1000
+        },
+        "bounding_box_aspect_ratio": 1.0,
+        "has_significant_borders": true,
+        "category": "portrait"
+    },
+    {
+        "filename": "VRChat_2025-01-15_23-42-34.290_1920x1080.png",
+        "original_dimensions": {
+            "width": 1920,
+            "height": 1080
+        },
+        "original_aspect_ratio": 1.78,
+        "bounding_box": {
+            "left": 434,
+            "top": 14,
+            "right": 1486,
+            "bottom": 1066
+        },
+        "bounding_box_dimensions": {
+            "width": 1052,
+            "height": 1052
+        },
+        "bounding_box_aspect_ratio": 1.0,
+        "has_significant_borders": true,
+        "category": "portrait"
+    }
+]

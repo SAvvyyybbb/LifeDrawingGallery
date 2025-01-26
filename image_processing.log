@@ -1,0 +1,612 @@
+2025-01-26 20:03:04,143 - ERROR - Unexpected error encountered: name 'process_category' is not defined
+2025-01-26 20:03:10,759 - ERROR - Unexpected error encountered: name 'process_category' is not defined
+2025-01-26 20:05:08,522 - INFO - Processing images directly from Abstract folder under 'main' subcategory.
+2025-01-26 20:05:08,525 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Abstract...
+2025-01-26 20:05:09,142 - INFO - Stitching batch 1...
+2025-01-26 20:05:09,490 - INFO - Batch 1 stitched and saved as Abstract-main-1.png.
+2025-01-26 20:05:09,491 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Abstract...
+2025-01-26 20:05:09,721 - INFO - Stitching batch 2...
+2025-01-26 20:05:10,088 - INFO - Batch 2 stitched and saved as Abstract-main-2.png.
+2025-01-26 20:05:10,088 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Abstract...
+2025-01-26 20:05:10,342 - WARNING - Not enough images for a full batch. Skipping batch 3. Remaining: 15
+2025-01-26 20:05:10,344 - WARNING - No images found in Savvb folder. Skipping.
+2025-01-26 20:05:10,344 - WARNING - No images found in Yolki folder. Skipping.
+2025-01-26 20:05:10,344 - INFO - Processing images directly from Artist folder under 'main' subcategory.
+2025-01-26 20:05:10,345 - WARNING - No images found in main folder. Skipping.
+2025-01-26 20:05:10,348 - INFO - Processing images directly from Fan art folder under 'main' subcategory.
+2025-01-26 20:05:10,352 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Fan art...
+2025-01-26 20:05:10,586 - INFO - Stitching batch 1...
+2025-01-26 20:05:10,947 - INFO - Batch 1 stitched and saved as Fan art-main-1.png.
+2025-01-26 20:05:10,947 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Fan art...
+2025-01-26 20:05:11,219 - INFO - Stitching batch 2...
+2025-01-26 20:05:11,651 - INFO - Batch 2 stitched and saved as Fan art-main-2.png.
+2025-01-26 20:05:11,651 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Fan art...
+2025-01-26 20:05:11,925 - INFO - Stitching batch 3...
+2025-01-26 20:05:12,367 - INFO - Batch 3 stitched and saved as Fan art-main-3.png.
+2025-01-26 20:05:12,368 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Fan art...
+2025-01-26 20:05:12,439 - WARNING - Not enough images for a full batch. Skipping batch 4. Remaining: 4
+2025-01-26 20:05:12,445 - INFO - Processing images directly from Nature folder under 'main' subcategory.
+2025-01-26 20:05:12,449 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Nature...
+2025-01-26 20:05:12,702 - INFO - Stitching batch 1...
+2025-01-26 20:05:13,097 - INFO - Batch 1 stitched and saved as Nature-main-1.png.
+2025-01-26 20:05:13,097 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Nature...
+2025-01-26 20:05:13,390 - INFO - Stitching batch 2...
+2025-01-26 20:05:13,834 - INFO - Batch 2 stitched and saved as Nature-main-2.png.
+2025-01-26 20:05:13,834 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Nature...
+2025-01-26 20:05:14,119 - INFO - Stitching batch 3...
+2025-01-26 20:05:14,546 - INFO - Batch 3 stitched and saved as Nature-main-3.png.
+2025-01-26 20:05:14,547 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Nature...
+2025-01-26 20:05:14,716 - WARNING - Duplicate image found: VRChat_2024-12-03_21-01-30.641_1920x1080.png. It will be ignored.
+2025-01-26 20:05:14,787 - WARNING - Not enough images for a full batch. Skipping batch 4. Remaining: 12
+2025-01-26 20:05:14,791 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Portraits\Ham...
+2025-01-26 20:05:14,996 - WARNING - Not enough images for a full batch. Skipping batch 1. Remaining: 15
+2025-01-26 20:05:14,996 - INFO - Processing images directly from Portraits folder under 'main' subcategory.
+2025-01-26 20:05:14,999 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Portraits...
+2025-01-26 20:05:15,183 - WARNING - Not enough images for a full batch. Skipping batch 1. Remaining: 11
+2025-01-26 20:05:15,186 - INFO - Processing images directly from Sketches folder under 'main' subcategory.
+2025-01-26 20:05:15,188 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Sketches...
+2025-01-26 20:05:15,414 - INFO - Stitching batch 1...
+2025-01-26 20:05:15,738 - INFO - Batch 1 stitched and saved as Sketches-main-1.png.
+2025-01-26 20:05:15,738 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Sketches...
+2025-01-26 20:05:15,963 - WARNING - Not enough images for a full batch. Skipping batch 2. Remaining: 13
+2025-01-26 20:05:15,966 - INFO - 
+Summary Report
+2025-01-26 20:05:15,966 - INFO - ========================================
+2025-01-26 20:05:15,967 - INFO - 
+Category: Abstract
+2025-01-26 20:05:15,967 - INFO -   Subcategory: main
+2025-01-26 20:05:15,968 - INFO -     Images in folder: 0
+2025-01-26 20:05:15,968 - INFO -     Checked: 47
+2025-01-26 20:05:15,969 - INFO -     Duplicates found: 0
+2025-01-26 20:05:15,969 - INFO -     Processed: 32
+2025-01-26 20:05:15,970 - INFO -     Stitched batches: 2
+2025-01-26 20:05:15,970 - INFO - 
+Category: Artist
+2025-01-26 20:05:15,970 - INFO - 
+Category: Fan art
+2025-01-26 20:05:15,971 - INFO -   Subcategory: main
+2025-01-26 20:05:15,971 - INFO -     Images in folder: 0
+2025-01-26 20:05:15,972 - INFO -     Checked: 52
+2025-01-26 20:05:15,972 - INFO -     Duplicates found: 0
+2025-01-26 20:05:15,973 - INFO -     Processed: 48
+2025-01-26 20:05:15,973 - INFO -     Stitched batches: 3
+2025-01-26 20:05:15,974 - INFO - 
+Category: Nature
+2025-01-26 20:05:15,974 - INFO -   Subcategory: main
+2025-01-26 20:05:15,975 - INFO -     Images in folder: 0
+2025-01-26 20:05:15,975 - INFO -     Checked: 61
+2025-01-26 20:05:15,976 - INFO -     Duplicates found: 1
+2025-01-26 20:05:15,976 - INFO -     Processed: 48
+2025-01-26 20:05:15,977 - INFO -     Stitched batches: 3
+2025-01-26 20:05:15,977 - INFO - 
+Category: Portraits
+2025-01-26 20:05:15,978 - INFO -   Subcategory: Ham
+2025-01-26 20:05:15,978 - INFO -     Images in folder: 0
+2025-01-26 20:05:15,980 - INFO -     Checked: 15
+2025-01-26 20:05:15,981 - INFO -     Duplicates found: 0
+2025-01-26 20:05:15,982 - INFO -     Processed: 0
+2025-01-26 20:05:15,982 - INFO -     Stitched batches: 0
+2025-01-26 20:05:15,982 - INFO -   Subcategory: main
+2025-01-26 20:05:15,983 - INFO -     Images in folder: 0
+2025-01-26 20:05:15,983 - INFO -     Checked: 11
+2025-01-26 20:05:15,984 - INFO -     Duplicates found: 0
+2025-01-26 20:05:15,985 - INFO -     Processed: 0
+2025-01-26 20:05:15,985 - INFO -     Stitched batches: 0
+2025-01-26 20:05:15,985 - INFO - 
+Category: Sketches
+2025-01-26 20:05:15,986 - INFO -   Subcategory: main
+2025-01-26 20:05:15,986 - INFO -     Images in folder: 0
+2025-01-26 20:05:15,987 - INFO -     Checked: 29
+2025-01-26 20:05:15,987 - INFO -     Duplicates found: 0
+2025-01-26 20:05:15,988 - INFO -     Processed: 16
+2025-01-26 20:05:15,988 - INFO -     Stitched batches: 1
+2025-01-26 20:05:15,989 - INFO - ========================================
+2025-01-26 20:07:54,012 - INFO - Processing images directly from Abstract folder under 'main' subcategory.
+2025-01-26 20:07:54,015 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Abstract...
+2025-01-26 20:07:54,640 - INFO - Stitching batch 1...
+2025-01-26 20:07:54,987 - INFO - Batch 1 stitched and saved as Abstract-main-1.png.
+2025-01-26 20:07:54,987 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Abstract...
+2025-01-26 20:07:55,222 - INFO - Stitching batch 2...
+2025-01-26 20:07:55,592 - INFO - Batch 2 stitched and saved as Abstract-main-2.png.
+2025-01-26 20:07:55,592 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Abstract...
+2025-01-26 20:07:55,850 - WARNING - Not enough images for a full batch. Skipping batch 3. Remaining: 15
+2025-01-26 20:07:55,852 - WARNING - No images found in Savvb folder. Skipping.
+2025-01-26 20:07:55,852 - WARNING - No images found in Yolki folder. Skipping.
+2025-01-26 20:07:55,852 - INFO - Processing images directly from Artist folder under 'main' subcategory.
+2025-01-26 20:07:55,853 - WARNING - No images found in main folder. Skipping.
+2025-01-26 20:07:55,856 - INFO - Processing images directly from Fan art folder under 'main' subcategory.
+2025-01-26 20:07:55,860 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Fan art...
+2025-01-26 20:07:56,096 - INFO - Stitching batch 1...
+2025-01-26 20:07:56,454 - INFO - Batch 1 stitched and saved as Fan art-main-1.png.
+2025-01-26 20:07:56,455 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Fan art...
+2025-01-26 20:07:56,723 - INFO - Stitching batch 2...
+2025-01-26 20:07:57,162 - INFO - Batch 2 stitched and saved as Fan art-main-2.png.
+2025-01-26 20:07:57,162 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Fan art...
+2025-01-26 20:07:57,436 - INFO - Stitching batch 3...
+2025-01-26 20:07:57,893 - INFO - Batch 3 stitched and saved as Fan art-main-3.png.
+2025-01-26 20:07:57,893 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Fan art...
+2025-01-26 20:07:57,965 - WARNING - Not enough images for a full batch. Skipping batch 4. Remaining: 4
+2025-01-26 20:07:57,970 - INFO - Processing images directly from Nature folder under 'main' subcategory.
+2025-01-26 20:07:57,975 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Nature...
+2025-01-26 20:07:58,225 - INFO - Stitching batch 1...
+2025-01-26 20:07:58,624 - INFO - Batch 1 stitched and saved as Nature-main-1.png.
+2025-01-26 20:07:58,625 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Nature...
+2025-01-26 20:07:58,918 - INFO - Stitching batch 2...
+2025-01-26 20:07:59,372 - INFO - Batch 2 stitched and saved as Nature-main-2.png.
+2025-01-26 20:07:59,372 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Nature...
+2025-01-26 20:07:59,668 - INFO - Stitching batch 3...
+2025-01-26 20:08:00,097 - INFO - Batch 3 stitched and saved as Nature-main-3.png.
+2025-01-26 20:08:00,097 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Nature...
+2025-01-26 20:08:00,264 - WARNING - Duplicate image found: VRChat_2024-12-03_21-01-30.641_1920x1080.png. It will be ignored.
+2025-01-26 20:08:00,335 - WARNING - Not enough images for a full batch. Skipping batch 4. Remaining: 12
+2025-01-26 20:08:00,338 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Portraits\Ham...
+2025-01-26 20:08:00,527 - WARNING - Not enough images for a full batch. Skipping batch 1. Remaining: 15
+2025-01-26 20:08:00,528 - INFO - Processing images directly from Portraits folder under 'main' subcategory.
+2025-01-26 20:08:00,530 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Portraits...
+2025-01-26 20:08:00,716 - WARNING - Not enough images for a full batch. Skipping batch 1. Remaining: 11
+2025-01-26 20:08:00,719 - INFO - Processing images directly from Sketches folder under 'main' subcategory.
+2025-01-26 20:08:00,721 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Sketches...
+2025-01-26 20:08:00,948 - INFO - Stitching batch 1...
+2025-01-26 20:08:01,281 - INFO - Batch 1 stitched and saved as Sketches-main-1.png.
+2025-01-26 20:08:01,281 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Sketches...
+2025-01-26 20:08:01,505 - WARNING - Not enough images for a full batch. Skipping batch 2. Remaining: 13
+2025-01-26 20:08:01,508 - INFO - 
+Summary Report
+2025-01-26 20:08:01,508 - INFO - ========================================
+2025-01-26 20:08:01,509 - INFO - 
+Category: Abstract
+2025-01-26 20:08:01,509 - INFO -   Subcategory: main
+2025-01-26 20:08:01,510 - INFO -     Images in folder: 0
+2025-01-26 20:08:01,510 - INFO -     Checked: 47
+2025-01-26 20:08:01,511 - INFO -     Duplicates found: 0
+2025-01-26 20:08:01,511 - INFO -     Processed: 32
+2025-01-26 20:08:01,512 - INFO -     Stitched batches: 2
+2025-01-26 20:08:01,513 - INFO - 
+Category: Artist
+2025-01-26 20:08:01,513 - INFO - 
+Category: Fan art
+2025-01-26 20:08:01,514 - INFO -   Subcategory: main
+2025-01-26 20:08:01,514 - INFO -     Images in folder: 0
+2025-01-26 20:08:01,514 - INFO -     Checked: 52
+2025-01-26 20:08:01,515 - INFO -     Duplicates found: 0
+2025-01-26 20:08:01,515 - INFO -     Processed: 48
+2025-01-26 20:08:01,516 - INFO -     Stitched batches: 3
+2025-01-26 20:08:01,516 - INFO - 
+Category: Nature
+2025-01-26 20:08:01,517 - INFO -   Subcategory: main
+2025-01-26 20:08:01,517 - INFO -     Images in folder: 0
+2025-01-26 20:08:01,518 - INFO -     Checked: 61
+2025-01-26 20:08:01,518 - INFO -     Duplicates found: 1
+2025-01-26 20:08:01,519 - INFO -     Processed: 48
+2025-01-26 20:08:01,519 - INFO -     Stitched batches: 3
+2025-01-26 20:08:01,520 - INFO - 
+Category: Portraits
+2025-01-26 20:08:01,520 - INFO -   Subcategory: Ham
+2025-01-26 20:08:01,521 - INFO -     Images in folder: 0
+2025-01-26 20:08:01,521 - INFO -     Checked: 15
+2025-01-26 20:08:01,521 - INFO -     Duplicates found: 0
+2025-01-26 20:08:01,522 - INFO -     Processed: 0
+2025-01-26 20:08:01,522 - INFO -     Stitched batches: 0
+2025-01-26 20:08:01,524 - INFO -   Subcategory: main
+2025-01-26 20:08:01,525 - INFO -     Images in folder: 0
+2025-01-26 20:08:01,525 - INFO -     Checked: 11
+2025-01-26 20:08:01,526 - INFO -     Duplicates found: 0
+2025-01-26 20:08:01,526 - INFO -     Processed: 0
+2025-01-26 20:08:01,527 - INFO -     Stitched batches: 0
+2025-01-26 20:08:01,528 - INFO - 
+Category: Sketches
+2025-01-26 20:08:01,528 - INFO -   Subcategory: main
+2025-01-26 20:08:01,529 - INFO -     Images in folder: 0
+2025-01-26 20:08:01,529 - INFO -     Checked: 29
+2025-01-26 20:08:01,530 - INFO -     Duplicates found: 0
+2025-01-26 20:08:01,530 - INFO -     Processed: 16
+2025-01-26 20:08:01,531 - INFO -     Stitched batches: 1
+2025-01-26 20:08:01,531 - INFO - 
+Overall Summary
+2025-01-26 20:08:01,532 - INFO - ========================================
+2025-01-26 20:08:01,532 - INFO - Total images checked: 215
+2025-01-26 20:08:01,533 - INFO - Total duplicates found: 1
+2025-01-26 20:08:01,533 - INFO - Total images processed: 144
+2025-01-26 20:08:01,534 - INFO - Total stitched batches: 9
+2025-01-26 20:08:01,534 - INFO - ========================================
+2025-01-26 20:11:42,567 - INFO - Processing images directly from Abstract folder under 'main' subcategory.
+2025-01-26 20:11:42,571 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Abstract...
+2025-01-26 20:11:43,171 - INFO - Stitching batch 1...
+2025-01-26 20:11:43,802 - INFO - Converted C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Abstract-main-1.png to C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Abstract-main-1.dds
+2025-01-26 20:11:43,802 - INFO - Batch 1 stitched and saved as Abstract-main-1.png and Abstract-main-1.dds.
+2025-01-26 20:11:43,803 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Abstract...
+2025-01-26 20:11:44,061 - INFO - Stitching batch 2...
+2025-01-26 20:11:44,558 - INFO - Converted C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Abstract-main-2.png to C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Abstract-main-2.dds
+2025-01-26 20:11:44,559 - INFO - Batch 2 stitched and saved as Abstract-main-2.png and Abstract-main-2.dds.
+2025-01-26 20:11:44,559 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Abstract...
+2025-01-26 20:11:44,822 - WARNING - Not enough images for a full batch. Skipping batch 3. Remaining: 15
+2025-01-26 20:11:44,822 - WARNING - No images found in Savvb folder. Skipping.
+2025-01-26 20:11:44,823 - WARNING - No images found in Yolki folder. Skipping.
+2025-01-26 20:11:44,823 - INFO - Processing images directly from Artist folder under 'main' subcategory.
+2025-01-26 20:11:44,823 - WARNING - No images found in main folder. Skipping.
+2025-01-26 20:11:44,827 - INFO - Processing images directly from Fan art folder under 'main' subcategory.
+2025-01-26 20:11:44,832 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Fan art...
+2025-01-26 20:11:45,081 - INFO - Stitching batch 1...
+2025-01-26 20:11:45,574 - INFO - Converted C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Fan art-main-1.png to C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Fan art-main-1.dds
+2025-01-26 20:11:45,574 - INFO - Batch 1 stitched and saved as Fan art-main-1.png and Fan art-main-1.dds.
+2025-01-26 20:11:45,575 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Fan art...
+2025-01-26 20:11:45,986 - INFO - Stitching batch 2...
+2025-01-26 20:11:46,567 - INFO - Converted C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Fan art-main-2.png to C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Fan art-main-2.dds
+2025-01-26 20:11:46,567 - INFO - Batch 2 stitched and saved as Fan art-main-2.png and Fan art-main-2.dds.
+2025-01-26 20:11:46,568 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Fan art...
+2025-01-26 20:11:46,858 - INFO - Stitching batch 3...
+2025-01-26 20:11:47,460 - INFO - Converted C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Fan art-main-3.png to C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Fan art-main-3.dds
+2025-01-26 20:11:47,460 - INFO - Batch 3 stitched and saved as Fan art-main-3.png and Fan art-main-3.dds.
+2025-01-26 20:11:47,462 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Fan art...
+2025-01-26 20:11:47,540 - WARNING - Not enough images for a full batch. Skipping batch 4. Remaining: 4
+2025-01-26 20:11:47,544 - INFO - Processing images directly from Nature folder under 'main' subcategory.
+2025-01-26 20:11:47,549 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Nature...
+2025-01-26 20:11:47,806 - INFO - Stitching batch 1...
+2025-01-26 20:11:48,339 - INFO - Converted C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Nature-main-1.png to C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Nature-main-1.dds
+2025-01-26 20:11:48,340 - INFO - Batch 1 stitched and saved as Nature-main-1.png and Nature-main-1.dds.
+2025-01-26 20:11:48,341 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Nature...
+2025-01-26 20:11:48,639 - INFO - Stitching batch 2...
+2025-01-26 20:11:49,232 - INFO - Converted C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Nature-main-2.png to C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Nature-main-2.dds
+2025-01-26 20:11:49,232 - INFO - Batch 2 stitched and saved as Nature-main-2.png and Nature-main-2.dds.
+2025-01-26 20:11:49,233 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Nature...
+2025-01-26 20:11:49,523 - INFO - Stitching batch 3...
+2025-01-26 20:11:50,102 - INFO - Converted C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Nature-main-3.png to C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Nature-main-3.dds
+2025-01-26 20:11:50,102 - INFO - Batch 3 stitched and saved as Nature-main-3.png and Nature-main-3.dds.
+2025-01-26 20:11:50,103 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Nature...
+2025-01-26 20:11:50,266 - WARNING - Duplicate image found: VRChat_2024-12-03_21-01-30.641_1920x1080.png. It will be ignored.
+2025-01-26 20:11:50,335 - WARNING - Not enough images for a full batch. Skipping batch 4. Remaining: 12
+2025-01-26 20:11:50,338 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Portraits\Ham...
+2025-01-26 20:11:50,523 - WARNING - Not enough images for a full batch. Skipping batch 1. Remaining: 15
+2025-01-26 20:11:50,524 - INFO - Processing images directly from Portraits folder under 'main' subcategory.
+2025-01-26 20:11:50,526 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Portraits...
+2025-01-26 20:11:50,697 - WARNING - Not enough images for a full batch. Skipping batch 1. Remaining: 11
+2025-01-26 20:11:50,700 - INFO - Processing images directly from Sketches folder under 'main' subcategory.
+2025-01-26 20:11:50,702 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Sketches...
+2025-01-26 20:11:50,914 - INFO - Stitching batch 1...
+2025-01-26 20:11:51,360 - INFO - Converted C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Sketches-main-1.png to C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Sketches-main-1.dds
+2025-01-26 20:11:51,361 - INFO - Batch 1 stitched and saved as Sketches-main-1.png and Sketches-main-1.dds.
+2025-01-26 20:11:51,362 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Sketches...
+2025-01-26 20:11:51,584 - WARNING - Not enough images for a full batch. Skipping batch 2. Remaining: 13
+2025-01-26 20:11:51,585 - INFO - 
+Summary Report
+2025-01-26 20:11:51,586 - INFO - ========================================
+2025-01-26 20:11:51,586 - INFO - 
+Category: Abstract
+2025-01-26 20:11:51,587 - INFO -   Subcategory: main
+2025-01-26 20:11:51,587 - INFO -     Images in folder: 0
+2025-01-26 20:11:51,588 - INFO -     Checked: 47
+2025-01-26 20:11:51,588 - INFO -     Duplicates found: 0
+2025-01-26 20:11:51,589 - INFO -     Processed: 32
+2025-01-26 20:11:51,589 - INFO -     Stitched batches: 2
+2025-01-26 20:11:51,590 - INFO - 
+Category: Artist
+2025-01-26 20:11:51,591 - INFO - 
+Category: Fan art
+2025-01-26 20:11:51,591 - INFO -   Subcategory: main
+2025-01-26 20:11:51,592 - INFO -     Images in folder: 0
+2025-01-26 20:11:51,592 - INFO -     Checked: 52
+2025-01-26 20:11:51,593 - INFO -     Duplicates found: 0
+2025-01-26 20:11:51,593 - INFO -     Processed: 48
+2025-01-26 20:11:51,593 - INFO -     Stitched batches: 3
+2025-01-26 20:11:51,594 - INFO - 
+Category: Nature
+2025-01-26 20:11:51,595 - INFO -   Subcategory: main
+2025-01-26 20:11:51,595 - INFO -     Images in folder: 0
+2025-01-26 20:11:51,595 - INFO -     Checked: 61
+2025-01-26 20:11:51,596 - INFO -     Duplicates found: 1
+2025-01-26 20:11:51,597 - INFO -     Processed: 48
+2025-01-26 20:11:51,597 - INFO -     Stitched batches: 3
+2025-01-26 20:11:51,597 - INFO - 
+Category: Portraits
+2025-01-26 20:11:51,598 - INFO -   Subcategory: Ham
+2025-01-26 20:11:51,599 - INFO -     Images in folder: 0
+2025-01-26 20:11:51,599 - INFO -     Checked: 15
+2025-01-26 20:11:51,599 - INFO -     Duplicates found: 0
+2025-01-26 20:11:51,600 - INFO -     Processed: 0
+2025-01-26 20:11:51,600 - INFO -     Stitched batches: 0
+2025-01-26 20:11:51,601 - INFO -   Subcategory: main
+2025-01-26 20:11:51,601 - INFO -     Images in folder: 0
+2025-01-26 20:11:51,602 - INFO -     Checked: 11
+2025-01-26 20:11:51,602 - INFO -     Duplicates found: 0
+2025-01-26 20:11:51,603 - INFO -     Processed: 0
+2025-01-26 20:11:51,603 - INFO -     Stitched batches: 0
+2025-01-26 20:11:51,605 - INFO - 
+Category: Sketches
+2025-01-26 20:11:51,606 - INFO -   Subcategory: main
+2025-01-26 20:11:51,606 - INFO -     Images in folder: 0
+2025-01-26 20:11:51,607 - INFO -     Checked: 29
+2025-01-26 20:11:51,607 - INFO -     Duplicates found: 0
+2025-01-26 20:11:51,608 - INFO -     Processed: 16
+2025-01-26 20:11:51,608 - INFO -     Stitched batches: 1
+2025-01-26 20:11:51,609 - INFO - 
+Overall Summary
+2025-01-26 20:11:51,609 - INFO - ========================================
+2025-01-26 20:11:51,609 - INFO - Total images checked: 215
+2025-01-26 20:11:51,610 - INFO - Total duplicates found: 1
+2025-01-26 20:11:51,610 - INFO - Total images processed: 144
+2025-01-26 20:11:51,611 - INFO - Total stitched batches: 9
+2025-01-26 20:11:51,611 - INFO - ========================================
+2025-01-26 20:20:05,895 - INFO - Processing images directly from Abstract folder under 'main' subcategory.
+2025-01-26 20:20:05,899 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Abstract...
+2025-01-26 20:20:06,512 - INFO - Stitching batch 1...
+2025-01-26 20:20:07,058 - INFO - Converted C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Abstract-main-1.png to C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Abstract-main-1.dds
+2025-01-26 20:20:07,059 - INFO - Batch 1 stitched and saved as Abstract-main-1.png and Abstract-main-1.dds.
+2025-01-26 20:20:07,059 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Abstract...
+2025-01-26 20:20:07,342 - INFO - Stitching batch 2...
+2025-01-26 20:20:07,851 - INFO - Converted C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Abstract-main-2.png to C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Abstract-main-2.dds
+2025-01-26 20:20:07,851 - INFO - Batch 2 stitched and saved as Abstract-main-2.png and Abstract-main-2.dds.
+2025-01-26 20:20:07,851 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Abstract...
+2025-01-26 20:20:08,108 - WARNING - Not enough images for a full batch. Skipping batch 3. Remaining: 15
+2025-01-26 20:20:08,109 - WARNING - No images found in Savvb folder. Skipping.
+2025-01-26 20:20:08,109 - WARNING - No images found in Yolki folder. Skipping.
+2025-01-26 20:20:08,109 - INFO - Processing images directly from Artist folder under 'main' subcategory.
+2025-01-26 20:20:08,110 - WARNING - No images found in main folder. Skipping.
+2025-01-26 20:20:08,115 - INFO - Processing images directly from Fan art folder under 'main' subcategory.
+2025-01-26 20:20:08,118 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Fan art...
+2025-01-26 20:20:08,378 - INFO - Stitching batch 1...
+2025-01-26 20:20:08,868 - INFO - Converted C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Fan art-main-1.png to C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Fan art-main-1.dds
+2025-01-26 20:20:08,868 - INFO - Batch 1 stitched and saved as Fan art-main-1.png and Fan art-main-1.dds.
+2025-01-26 20:20:08,870 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Fan art...
+2025-01-26 20:20:09,144 - INFO - Stitching batch 2...
+2025-01-26 20:20:09,717 - INFO - Converted C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Fan art-main-2.png to C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Fan art-main-2.dds
+2025-01-26 20:20:09,717 - INFO - Batch 2 stitched and saved as Fan art-main-2.png and Fan art-main-2.dds.
+2025-01-26 20:20:09,718 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Fan art...
+2025-01-26 20:20:09,988 - INFO - Stitching batch 3...
+2025-01-26 20:20:10,575 - INFO - Converted C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Fan art-main-3.png to C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Fan art-main-3.dds
+2025-01-26 20:20:10,576 - INFO - Batch 3 stitched and saved as Fan art-main-3.png and Fan art-main-3.dds.
+2025-01-26 20:20:10,577 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Fan art...
+2025-01-26 20:20:10,651 - WARNING - Not enough images for a full batch. Skipping batch 4. Remaining: 4
+2025-01-26 20:20:10,657 - INFO - Processing images directly from Nature folder under 'main' subcategory.
+2025-01-26 20:20:10,662 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Nature...
+2025-01-26 20:20:10,911 - INFO - Stitching batch 1...
+2025-01-26 20:20:11,449 - INFO - Converted C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Nature-main-1.png to C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Nature-main-1.dds
+2025-01-26 20:20:11,449 - INFO - Batch 1 stitched and saved as Nature-main-1.png and Nature-main-1.dds.
+2025-01-26 20:20:11,450 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Nature...
+2025-01-26 20:20:11,748 - INFO - Stitching batch 2...
+2025-01-26 20:20:12,340 - INFO - Converted C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Nature-main-2.png to C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Nature-main-2.dds
+2025-01-26 20:20:12,341 - INFO - Batch 2 stitched and saved as Nature-main-2.png and Nature-main-2.dds.
+2025-01-26 20:20:12,342 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Nature...
+2025-01-26 20:20:12,634 - INFO - Stitching batch 3...
+2025-01-26 20:20:13,211 - INFO - Converted C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Nature-main-3.png to C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Nature-main-3.dds
+2025-01-26 20:20:13,211 - INFO - Batch 3 stitched and saved as Nature-main-3.png and Nature-main-3.dds.
+2025-01-26 20:20:13,213 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Nature...
+2025-01-26 20:20:13,377 - WARNING - Duplicate image found: VRChat_2024-12-03_21-01-30.641_1920x1080.png. It will be ignored.
+2025-01-26 20:20:13,450 - WARNING - Not enough images for a full batch. Skipping batch 4. Remaining: 12
+2025-01-26 20:20:13,453 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Portraits\Ham...
+2025-01-26 20:20:13,644 - WARNING - Not enough images for a full batch. Skipping batch 1. Remaining: 15
+2025-01-26 20:20:13,644 - INFO - Processing images directly from Portraits folder under 'main' subcategory.
+2025-01-26 20:20:13,646 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Portraits...
+2025-01-26 20:20:13,838 - WARNING - Not enough images for a full batch. Skipping batch 1. Remaining: 11
+2025-01-26 20:20:13,842 - INFO - Processing images directly from Sketches folder under 'main' subcategory.
+2025-01-26 20:20:13,844 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Sketches...
+2025-01-26 20:20:14,086 - INFO - Stitching batch 1...
+2025-01-26 20:20:14,539 - INFO - Converted C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Sketches-main-1.png to C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Sketches-main-1.dds
+2025-01-26 20:20:14,539 - INFO - Batch 1 stitched and saved as Sketches-main-1.png and Sketches-main-1.dds.
+2025-01-26 20:20:14,540 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Sketches...
+2025-01-26 20:20:14,763 - WARNING - Not enough images for a full batch. Skipping batch 2. Remaining: 13
+2025-01-26 20:20:14,765 - INFO - 
+Summary Report
+2025-01-26 20:20:14,765 - INFO - ========================================
+2025-01-26 20:20:14,766 - INFO - 
+Category: Abstract
+2025-01-26 20:20:14,767 - INFO -   Subcategory: main
+2025-01-26 20:20:14,768 - INFO -     Images in folder: 0
+2025-01-26 20:20:14,769 - INFO -     Checked: 47
+2025-01-26 20:20:14,770 - INFO -     Duplicates found: 0
+2025-01-26 20:20:14,771 - INFO -     Processed: 32
+2025-01-26 20:20:14,771 - INFO -     Stitched batches: 2
+2025-01-26 20:20:14,772 - INFO - 
+Category: Artist
+2025-01-26 20:20:14,772 - INFO - 
+Category: Fan art
+2025-01-26 20:20:14,773 - INFO -   Subcategory: main
+2025-01-26 20:20:14,773 - INFO -     Images in folder: 0
+2025-01-26 20:20:14,774 - INFO -     Checked: 52
+2025-01-26 20:20:14,775 - INFO -     Duplicates found: 0
+2025-01-26 20:20:14,775 - INFO -     Processed: 48
+2025-01-26 20:20:14,776 - INFO -     Stitched batches: 3
+2025-01-26 20:20:14,776 - INFO - 
+Category: Nature
+2025-01-26 20:20:14,777 - INFO -   Subcategory: main
+2025-01-26 20:20:14,777 - INFO -     Images in folder: 0
+2025-01-26 20:20:14,777 - INFO -     Checked: 61
+2025-01-26 20:20:14,778 - INFO -     Duplicates found: 1
+2025-01-26 20:20:14,779 - INFO -     Processed: 48
+2025-01-26 20:20:14,779 - INFO -     Stitched batches: 3
+2025-01-26 20:20:14,780 - INFO - 
+Category: Portraits
+2025-01-26 20:20:14,781 - INFO -   Subcategory: Ham
+2025-01-26 20:20:14,781 - INFO -     Images in folder: 0
+2025-01-26 20:20:14,782 - INFO -     Checked: 15
+2025-01-26 20:20:14,784 - INFO -     Duplicates found: 0
+2025-01-26 20:20:14,785 - INFO -     Processed: 0
+2025-01-26 20:20:14,785 - INFO -     Stitched batches: 0
+2025-01-26 20:20:14,786 - INFO -   Subcategory: main
+2025-01-26 20:20:14,786 - INFO -     Images in folder: 0
+2025-01-26 20:20:14,787 - INFO -     Checked: 11
+2025-01-26 20:20:14,787 - INFO -     Duplicates found: 0
+2025-01-26 20:20:14,788 - INFO -     Processed: 0
+2025-01-26 20:20:14,788 - INFO -     Stitched batches: 0
+2025-01-26 20:20:14,789 - INFO - 
+Category: Sketches
+2025-01-26 20:20:14,790 - INFO -   Subcategory: main
+2025-01-26 20:20:14,790 - INFO -     Images in folder: 0
+2025-01-26 20:20:14,791 - INFO -     Checked: 29
+2025-01-26 20:20:14,791 - INFO -     Duplicates found: 0
+2025-01-26 20:20:14,792 - INFO -     Processed: 16
+2025-01-26 20:20:14,792 - INFO -     Stitched batches: 1
+2025-01-26 20:20:14,792 - INFO - 
+Overall Summary
+2025-01-26 20:20:14,793 - INFO - ========================================
+2025-01-26 20:20:14,794 - INFO - Total images checked: 215
+2025-01-26 20:20:14,794 - INFO - Total duplicates found: 1
+2025-01-26 20:20:14,794 - INFO - Total images processed: 144
+2025-01-26 20:20:14,795 - INFO - Total stitched batches: 9
+2025-01-26 20:20:14,795 - INFO - ========================================
+2025-01-26 20:48:23,979 - INFO - Processing images directly from Abstract folder under 'main' subcategory.
+2025-01-26 20:48:23,984 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Abstract...
+2025-01-26 20:48:24,599 - INFO - Stitching batch 1...
+2025-01-26 20:48:25,154 - INFO - Converted C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Abstract-main-1.png to C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Abstract-main-1.dds
+2025-01-26 20:48:25,155 - INFO - Batch 1 stitched and saved as Abstract-main-1.png and Abstract-main-1.dds.
+2025-01-26 20:48:25,156 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Abstract...
+2025-01-26 20:48:25,430 - INFO - Stitching batch 2...
+2025-01-26 20:48:25,937 - INFO - Converted C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Abstract-main-2.png to C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Abstract-main-2.dds
+2025-01-26 20:48:25,937 - INFO - Batch 2 stitched and saved as Abstract-main-2.png and Abstract-main-2.dds.
+2025-01-26 20:48:25,937 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Abstract...
+2025-01-26 20:48:26,210 - WARNING - Not enough images for a full batch. Skipping batch 3. Remaining: 15
+2025-01-26 20:48:26,211 - WARNING - No images found in Savvb folder. Skipping.
+2025-01-26 20:48:26,212 - WARNING - No images found in Yolki folder. Skipping.
+2025-01-26 20:48:26,212 - INFO - Processing images directly from Artist folder under 'main' subcategory.
+2025-01-26 20:48:26,212 - WARNING - No images found in main folder. Skipping.
+2025-01-26 20:48:26,212 - INFO - Processing images directly from extra_tall folder under 'main' subcategory.
+2025-01-26 20:48:26,213 - WARNING - No images found in main folder. Skipping.
+2025-01-26 20:48:26,213 - INFO - Processing images directly from extra_wide folder under 'main' subcategory.
+2025-01-26 20:48:26,213 - WARNING - No images found in main folder. Skipping.
+2025-01-26 20:48:26,218 - INFO - Processing images directly from Fan art folder under 'main' subcategory.
+2025-01-26 20:48:26,222 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Fan art...
+2025-01-26 20:48:26,459 - INFO - Stitching batch 1...
+2025-01-26 20:48:26,949 - INFO - Converted C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Fan art-main-1.png to C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Fan art-main-1.dds
+2025-01-26 20:48:26,950 - INFO - Batch 1 stitched and saved as Fan art-main-1.png and Fan art-main-1.dds.
+2025-01-26 20:48:26,951 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Fan art...
+2025-01-26 20:48:27,242 - INFO - Stitching batch 2...
+2025-01-26 20:48:27,818 - INFO - Converted C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Fan art-main-2.png to C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Fan art-main-2.dds
+2025-01-26 20:48:27,819 - INFO - Batch 2 stitched and saved as Fan art-main-2.png and Fan art-main-2.dds.
+2025-01-26 20:48:27,820 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Fan art...
+2025-01-26 20:48:28,103 - INFO - Stitching batch 3...
+2025-01-26 22:50:52,520 - INFO - Processing images directly from Abstract folder under 'main' subcategory.
+2025-01-26 22:50:52,523 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Abstract...
+2025-01-26 22:50:54,216 - INFO - Stitching batch 1...
+2025-01-26 22:50:54,840 - INFO - Converted C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Abstract-main-1.png to C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Abstract-main-1.dds
+2025-01-26 22:50:54,841 - INFO - Batch 1 stitched and saved as Abstract-main-1.png and Abstract-main-1.dds.
+2025-01-26 22:50:54,841 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Abstract...
+2025-01-26 22:50:55,082 - INFO - Stitching batch 2...
+2025-01-26 22:50:55,621 - INFO - Converted C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Abstract-main-2.png to C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Abstract-main-2.dds
+2025-01-26 22:50:55,621 - INFO - Batch 2 stitched and saved as Abstract-main-2.png and Abstract-main-2.dds.
+2025-01-26 22:50:55,621 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Abstract...
+2025-01-26 22:50:55,887 - WARNING - Not enough images for a full batch. Skipping batch 3. Remaining: 15
+2025-01-26 22:50:55,888 - WARNING - No images found in Savvb folder. Skipping.
+2025-01-26 22:50:55,888 - WARNING - No images found in Yolki folder. Skipping.
+2025-01-26 22:50:55,888 - INFO - Processing images directly from Artist folder under 'main' subcategory.
+2025-01-26 22:50:55,889 - WARNING - No images found in main folder. Skipping.
+2025-01-26 22:50:55,889 - INFO - Processing images directly from extra_tall folder under 'main' subcategory.
+2025-01-26 22:50:55,889 - WARNING - No images found in main folder. Skipping.
+2025-01-26 22:50:55,890 - INFO - Processing images directly from extra_wide folder under 'main' subcategory.
+2025-01-26 22:50:55,890 - WARNING - No images found in main folder. Skipping.
+2025-01-26 22:50:55,896 - INFO - Processing images directly from Fan art folder under 'main' subcategory.
+2025-01-26 22:50:55,900 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Fan art...
+2025-01-26 22:50:56,144 - INFO - Stitching batch 1...
+2025-01-26 22:50:56,626 - INFO - Converted C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Fan art-main-1.png to C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Fan art-main-1.dds
+2025-01-26 22:50:56,627 - INFO - Batch 1 stitched and saved as Fan art-main-1.png and Fan art-main-1.dds.
+2025-01-26 22:50:56,627 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Fan art...
+2025-01-26 22:50:56,908 - INFO - Stitching batch 2...
+2025-01-26 22:50:57,504 - INFO - Converted C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Fan art-main-2.png to C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Fan art-main-2.dds
+2025-01-26 22:50:57,504 - INFO - Batch 2 stitched and saved as Fan art-main-2.png and Fan art-main-2.dds.
+2025-01-26 22:50:57,506 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Fan art...
+2025-01-26 22:50:57,825 - INFO - Stitching batch 3...
+2025-01-26 22:50:58,414 - INFO - Converted C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Fan art-main-3.png to C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Fan art-main-3.dds
+2025-01-26 22:50:58,414 - INFO - Batch 3 stitched and saved as Fan art-main-3.png and Fan art-main-3.dds.
+2025-01-26 22:50:58,415 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Fan art...
+2025-01-26 22:50:58,488 - WARNING - Not enough images for a full batch. Skipping batch 4. Remaining: 4
+2025-01-26 22:50:58,489 - INFO - Processing images directly from landscape folder under 'main' subcategory.
+2025-01-26 22:50:58,490 - WARNING - No images found in main folder. Skipping.
+2025-01-26 22:50:58,497 - INFO - Processing images directly from Nature folder under 'main' subcategory.
+2025-01-26 22:50:58,502 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Nature...
+2025-01-26 22:50:58,791 - INFO - Stitching batch 1...
+2025-01-26 22:50:59,334 - INFO - Converted C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Nature-main-1.png to C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Nature-main-1.dds
+2025-01-26 22:50:59,334 - INFO - Batch 1 stitched and saved as Nature-main-1.png and Nature-main-1.dds.
+2025-01-26 22:50:59,336 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Nature...
+2025-01-26 22:50:59,620 - INFO - Stitching batch 2...
+2025-01-26 22:51:00,235 - INFO - Converted C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Nature-main-2.png to C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Nature-main-2.dds
+2025-01-26 22:51:00,235 - INFO - Batch 2 stitched and saved as Nature-main-2.png and Nature-main-2.dds.
+2025-01-26 22:51:00,237 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Nature...
+2025-01-26 22:51:00,518 - INFO - Stitching batch 3...
+2025-01-26 22:51:01,088 - INFO - Converted C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Nature-main-3.png to C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Nature-main-3.dds
+2025-01-26 22:51:01,088 - INFO - Batch 3 stitched and saved as Nature-main-3.png and Nature-main-3.dds.
+2025-01-26 22:51:01,089 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Nature...
+2025-01-26 22:51:01,256 - WARNING - Duplicate image found: VRChat_2024-12-03_21-01-30.641_1920x1080.png. It will be ignored.
+2025-01-26 22:51:01,351 - WARNING - Not enough images for a full batch. Skipping batch 4. Remaining: 12
+2025-01-26 22:51:01,352 - INFO - Processing images directly from portrait folder under 'main' subcategory.
+2025-01-26 22:51:01,352 - WARNING - No images found in main folder. Skipping.
+2025-01-26 22:51:01,357 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Portraits\Ham...
+2025-01-26 22:51:01,546 - WARNING - Not enough images for a full batch. Skipping batch 1. Remaining: 15
+2025-01-26 22:51:01,546 - INFO - Processing images directly from Portraits folder under 'main' subcategory.
+2025-01-26 22:51:01,549 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Portraits...
+2025-01-26 22:51:01,732 - WARNING - Not enough images for a full batch. Skipping batch 1. Remaining: 11
+2025-01-26 22:51:01,736 - INFO - Processing images directly from Sketches folder under 'main' subcategory.
+2025-01-26 22:51:01,738 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Sketches...
+2025-01-26 22:51:01,976 - INFO - Stitching batch 1...
+2025-01-26 22:51:02,424 - INFO - Converted C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Sketches-main-1.png to C:\Users\Sabbo\LifeDrawingGallery\UV Maps\Sketches-main-1.dds
+2025-01-26 22:51:02,425 - INFO - Batch 1 stitched and saved as Sketches-main-1.png and Sketches-main-1.dds.
+2025-01-26 22:51:02,426 - INFO - Checking for duplicates and loading images in C:\Users\Sabbo\LifeDrawingGallery\Processed\Sketches...
+2025-01-26 22:51:02,638 - WARNING - Not enough images for a full batch. Skipping batch 2. Remaining: 13
+2025-01-26 22:51:02,639 - INFO - Processing images directly from square folder under 'main' subcategory.
+2025-01-26 22:51:02,640 - WARNING - No images found in main folder. Skipping.
+2025-01-26 22:51:02,641 - INFO - 
+Summary Report
+2025-01-26 22:51:02,642 - INFO - ========================================
+2025-01-26 22:51:02,642 - INFO - 
+Category: Abstract
+2025-01-26 22:51:02,643 - INFO -   Subcategory: main
+2025-01-26 22:51:02,643 - INFO -     Images in folder: 0
+2025-01-26 22:51:02,644 - INFO -     Checked: 47
+2025-01-26 22:51:02,644 - INFO -     Duplicates found: 0
+2025-01-26 22:51:02,645 - INFO -     Processed: 32
+2025-01-26 22:51:02,645 - INFO -     Stitched batches: 2
+2025-01-26 22:51:02,646 - INFO - 
+Category: Artist
+2025-01-26 22:51:02,646 - INFO - 
+Category: extra_tall
+2025-01-26 22:51:02,647 - INFO - 
+Category: extra_wide
+2025-01-26 22:51:02,647 - INFO - 
+Category: Fan art
+2025-01-26 22:51:02,649 - INFO -   Subcategory: main
+2025-01-26 22:51:02,649 - INFO -     Images in folder: 0
+2025-01-26 22:51:02,650 - INFO -     Checked: 52
+2025-01-26 22:51:02,650 - INFO -     Duplicates found: 0
+2025-01-26 22:51:02,651 - INFO -     Processed: 48
+2025-01-26 22:51:02,651 - INFO -     Stitched batches: 3
+2025-01-26 22:51:02,651 - INFO - 
+Category: landscape
+2025-01-26 22:51:02,652 - INFO - 
+Category: Nature
+2025-01-26 22:51:02,652 - INFO -   Subcategory: main
+2025-01-26 22:51:02,653 - INFO -     Images in folder: 0
+2025-01-26 22:51:02,653 - INFO -     Checked: 61
+2025-01-26 22:51:02,654 - INFO -     Duplicates found: 1
+2025-01-26 22:51:02,655 - INFO -     Processed: 48
+2025-01-26 22:51:02,655 - INFO -     Stitched batches: 3
+2025-01-26 22:51:02,655 - INFO - 
+Category: portrait
+2025-01-26 22:51:02,656 - INFO - 
+Category: Portraits
+2025-01-26 22:51:02,656 - INFO -   Subcategory: Ham
+2025-01-26 22:51:02,657 - INFO -     Images in folder: 0
+2025-01-26 22:51:02,657 - INFO -     Checked: 15
+2025-01-26 22:51:02,658 - INFO -     Duplicates found: 0
+2025-01-26 22:51:02,658 - INFO -     Processed: 0
+2025-01-26 22:51:02,659 - INFO -     Stitched batches: 0
+2025-01-26 22:51:02,659 - INFO -   Subcategory: main
+2025-01-26 22:51:02,660 - INFO -     Images in folder: 0
+2025-01-26 22:51:02,660 - INFO -     Checked: 11
+2025-01-26 22:51:02,660 - INFO -     Duplicates found: 0
+2025-01-26 22:51:02,661 - INFO -     Processed: 0
+2025-01-26 22:51:02,662 - INFO -     Stitched batches: 0
+2025-01-26 22:51:02,662 - INFO - 
+Category: Sketches
+2025-01-26 22:51:02,663 - INFO -   Subcategory: main
+2025-01-26 22:51:02,663 - INFO -     Images in folder: 0
+2025-01-26 22:51:02,665 - INFO -     Checked: 29
+2025-01-26 22:51:02,666 - INFO -     Duplicates found: 0
+2025-01-26 22:51:02,666 - INFO -     Processed: 16
+2025-01-26 22:51:02,667 - INFO -     Stitched batches: 1
+2025-01-26 22:51:02,667 - INFO - 
+Category: square
+2025-01-26 22:51:02,668 - INFO - 
+Overall Summary
+2025-01-26 22:51:02,668 - INFO - ========================================
+2025-01-26 22:51:02,669 - INFO - Total images checked: 215
+2025-01-26 22:51:02,669 - INFO - Total duplicates found: 1
+2025-01-26 22:51:02,670 - INFO - Total images processed: 144
+2025-01-26 22:51:02,670 - INFO - Total stitched batches: 9
+2025-01-26 22:51:02,671 - INFO - ========================================
