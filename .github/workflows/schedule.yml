@@ -1,7 +1,8 @@
 name: Discord Announcer
 on:
   schedule:
-    - cron: '21 20 * * 1'  # Runs at 20:21 UTC every Monday
+    - cron: '*/10 * * * *'  # Runs every 10 minutes
+
   workflow_dispatch:  # Allows manual triggering
 
 jobs:
