@@ -1,37 +1,97 @@
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import requests
+import os
+from datetime import datetime
+import json
 
-# Google Sheets Authentication
-scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_name("your_credentials.json", scope)
-client = gspread.authorize(creds)
+# Load credentials from GitHub Secrets
+GOOGLE_CREDENTIALS_JSON = json.loads(os.getenv("GOOGLE_CREDENTIALS"))
+DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
+SPREADSHEET_ID = "1XEw4Xj7zkMSLfHBDwOuk_tHRR3XlkuwrBvsb5x-ANf8"
 
-# Open the spreadsheet by ID (from your link)
-spreadsheet = client.open_by_key("1XEw4Xj7zkMSLfHBDwOuk_tHRR3XlkuwrBvsb5x-ANf8")
-sheet = spreadsheet.sheet1  # Use the first sheet
+# Debug: Starting script
+print("🔍 Starting script execution...")
 
-# Fetch the merged cell content (F2:L8)
-data = sheet.get("F2:L8")
-text_content = "\n".join([cell[0] for cell in data])  # Combine the merged cell's text
+try:
+    # Authenticate with Google Sheets
+    print("🔑 Authenticating with Google Sheets...")
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(GOOGLE_CREDENTIALS_JSON, scope)
+    client = gspread.authorize(creds)
+    print("✅ Authentication successful!")
+    
+    # Open the spreadsheet and get the sheet
+    print("📂 Accessing the spreadsheet...")
+    sheet = client.open_by_key(SPREADSHEET_ID).sheet1  
+    print("✅ Spreadsheet accessed successfully!")
+    
+    # Read all data from the sheet
+    print("📊 Fetching sheet data...")
+    data = sheet.get_all_values()  # Gets all rows as a list of lists
+    print(f"✅ Retrieved {len(data)} rows from the sheet.")
+    
+    # Find the next unchecked prompt
+    print("🔍 Searching for the next unchecked prompt...")
+    for i, row in enumerate(data[1:], start=2):  # Skip header (assuming row 1 is headers)
+        if len(row) < 3:
+            print(f"⚠️ Skipping row {i} due to insufficient columns.")
+            continue
+        
+        prompt = row[1]  # Column B (Index 1)
+        announced = row[2].strip().lower()  # Column C (Checkbox, Index 2)
 
-# Clean the text for Discord (replace multiple newlines with a single one)
-message = f"📢 **Announcement:**\n{text_content.strip()}"
+        print(f"DEBUG: Row {i}: Prompt: {prompt}, Announced: {announced}")
 
-# Discord Webhook URL
-DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1343515563422515251/D8JB5FDGtraudJ-xVTMlveBxI2kA_Eh0-QIJwMnaWSsODBgJEpL3YATbo9jpunCUCHKJ"
+        # Only check the checkbox status
+        if announced != "true":  # If not marked as announced
+            if not prompt:
+                print(f"⚠️ Skipping row {i} as prompt is empty.")
+                continue  # Skip if there's no prompt
 
-# Optional: You can specify a thread ID to reply to a specific forum thread
-# If you want to start a new thread, remove the 'thread_id' parameter.
-thread_id = "123456789012345678"  # Use the thread ID if you want to reply to a specific thread
+            print(f"📢 Found unchecked prompt: {prompt}")
 
-payload = {
-    "content": message,
-    "thread_id": thread_id  # Uncomment this line if replying to an existing thread
-}
+            # Get the current date to include in the announcement (DD Month Year format)
+            current_date = datetime.now().strftime("%d %B %Y")  # e.g., "24 February 2025"
 
-# Send the message to the Forum channel via Webhook
-requests.post(DISCORD_WEBHOOK_URL, json=payload)
+            # Format Discord announcement message with more gravitas and date
+            message = f"""
+🎨 **Hello fellow artists!** 🌟
 
-print("Announcement Sent to Forum Channel!")
-    input("\nPress Enter to exit...")
+I'm thrilled to announce this week's Life Drawing prompt as of **{current_date}**:  
+**"{prompt}"**
+
+This prompt is an opportunity for you to explore and create something fun to you! The goal is to interpret it in your own way, using whatever medium or technique resonates with you. Let your imagination run wild while maintaining respect and creativity.
+
+This challenge is open to everyone—whether you’re working in VR, traditional media, or something else entirely, your creativity is what counts. Feel free to share as many submissions as you like. The more, the better!
+
+A new prompt will be available every week, but submissions are **always welcome**. It’s never too late to join in and contribute.  
+If there’s a prompt from the past that caught your eye, feel free to revisit it and add your own twist. There’s no expiration on inspiration!
+
+Looking forward to seeing your amazing interpretations and creative work! 🎨✨
+"""
+
+            # Send the message to Discord
+            print("📤 Sending announcement to Discord...")
+            response = requests.post(DISCORD_WEBHOOK_URL, json={"content": message})
+            
+            # Check response status and print appropriate message
+            if response.status_code == 204:
+                print(f"✅ Announcement for prompt '{prompt}' sent successfully!")
+                
+                # Mark prompt as announced (tick the checkbox in Column C)
+                print("✅ Marking prompt as announced in Google Sheets...")
+                sheet.update_cell(i, 3, "TRUE")
+                print(f"✅ Prompt '{prompt}' marked as announced.")
+            else:
+                print(f"❌ Failed to send announcement: {response.status_code} - {response.text}")
+            
+            break  # Stop after the first unchecked prompt is found and sent
+    
+    else:
+        print("✅ All prompts have already been announced!")
+
+except Exception as e:
+    print(f"❌ An error occurred: {e}")
+
+input("\nPress Enter to exit...")
