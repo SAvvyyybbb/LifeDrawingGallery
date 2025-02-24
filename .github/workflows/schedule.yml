@@ -20,7 +20,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run script
-        run: python Prompt Scheduler.py  # Update this to match the location of your script
+        run: python Prompt_Scheduler.py  # Update this to match the location of your script
         env:
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}  # Secret for Google credentials
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}  # Secret for Google credentials (as JSON)
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}  # Secret for Discord webhook URL
