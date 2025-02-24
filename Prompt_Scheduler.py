@@ -56,7 +56,7 @@ try:
 
             # Format Discord announcement message with more gravitas and date
             message = f"""
-@art prompts
+f"<@&1227638634963009586>
 🎨 **Hello fellow artists!** 🌟
 
 I'm thrilled to announce this week's Life Drawing prompt as of **{current_date}**: 
