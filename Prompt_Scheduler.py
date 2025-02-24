@@ -56,10 +56,12 @@ try:
 
             # Format Discord announcement message with more gravitas and date
             message = f"""
+@art prompts
 🎨 **Hello fellow artists!** 🌟
 
-I'm thrilled to announce this week's Life Drawing prompt as of **{current_date}**:  
-**"{prompt}"**
+I'm thrilled to announce this week's Life Drawing prompt as of **{current_date}**: 
+ 
+**"{prompt}"**!
 
 This prompt is an opportunity for you to explore and create something fun to you! The goal is to interpret it in your own way, using whatever medium or technique resonates with you. Let your imagination run wild while maintaining respect and creativity.
 
