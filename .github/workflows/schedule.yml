@@ -1,0 +1,23 @@
+name: Discord Announcer
+on:
+  schedule:
+    - cron: '0 21 * * 1'  # Runs at 9 AM Tuesday (NZST)
+  workflow_dispatch:  # Allows manual triggering
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run script
+        run: python your_script.py
