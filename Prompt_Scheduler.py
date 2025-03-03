@@ -95,5 +95,3 @@ Looking forward to seeing your amazing interpretations and creative work! 🎨�
 
 except Exception as e:
     print(f"❌ An error occurred: {e}")
-
-input("\nPress Enter to exit...")
