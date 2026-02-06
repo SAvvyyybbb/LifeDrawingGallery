@@ -11,9 +11,9 @@ CLEANED_DIR = IMAGE_PROCESSING_DIR / "2_Cleaned"  # processed / cleaned images
 STITCHED_DIR = IMAGE_PROCESSING_DIR / "3_Stitched"  # final stitched output
 
 # ---------------- Database ----------------
-DB_DIR = ROOT_DIR / "UV Maps"  # folder where DBs are stored
-DB_DIR.mkdir(exist_ok=True, parents=True)  # ensure folder exists
-DB_PATH = DB_DIR / "stitch_batches.db"
+DB_DIR = IMAGE_PROCESSING_DIR / "Databases"  # folder where DBs are stored
+DB_DIR.mkdir(exist_ok=True, parents=True)    # ensure folder exists
+DB_PATH = DB_DIR / "image_data.db"          # new DB file
 
 # ---------------- Token ----------------
 TOKEN_FILE = ROOT_DIR / ".gitignore" / "token.txt"
@@ -44,11 +44,5 @@ BATCH_COMMIT_SIZE = 1              # optional: commit to DB every N images
 TESTING_MODE = True                # <-- EDIT: True=dry run, False=save images & DB writes
 
 # ---------------- Optional Date Range for Message Processing (EDIT THESE) ----------------
-# Use UTC datetime objects. If None, defaults to all messages.
-# Examples:
-#   Only process messages from Jan 1, 2026 to Feb 1, 2026:
-#       SEARCH_AFTER = datetime(2026, 1, 1, 0, 0)
-#       SEARCH_BEFORE = datetime(2026, 2, 1, 0, 0)
-#       Or just literally: None 
 SEARCH_AFTER = datetime(2026, 2, 1, 0, 0)   # <-- EDIT: set a datetime to start processing from
 SEARCH_BEFORE = None  # set to datetime(...) if you want an end date
