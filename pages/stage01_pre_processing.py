@@ -2,21 +2,16 @@ import streamlit as st
 from pathlib import Path
 from PIL import Image
 import numpy as np
-<<<<<<< HEAD
 import imagehash
 import sqlite3
 from datetime import datetime, timezone
 import hashlib
 import config
-=======
-import config  # import centralized config
->>>>>>> 8bf44ef04b181bc2f2ad841cd166aab13476240f
 
 # ---------------- Config ----------------
 RAW_DIR = config.RAW_DIR
 PROCESSED_DIR = config.CLEANED_DIR
 TOLERANCE = config.TOLERANCE
-<<<<<<< HEAD
 DB_PATH = config.DB_DIR / "image_data.db"
 
 # ---------------- Helpers ----------------
@@ -78,13 +73,6 @@ def find_raw_record(cursor, raw_hash, filename):
 # ---------------- Streamlit UI ----------------
 st.title("Stage 0: Preprocess Raw Images (Optional)")
 
-=======
-
-# ---------------- Page UI ----------------
-st.title("Stage 0: Preprocess Raw Images (Optional)")
-
-# Scan Raw folder
->>>>>>> 8bf44ef04b181bc2f2ad841cd166aab13476240f
 raw_files = [f for f in RAW_DIR.iterdir() if f.suffix.lower() in (".png", ".jpg", ".jpeg")]
 total_raw = len(raw_files)
 st.write(f"Found {total_raw} image(s) in Raw folder.")
@@ -93,10 +81,7 @@ if total_raw == 0:
     st.info("No images found in Raw folder. Stage 0 skipped.")
 else:
     if st.button("Run Stage 0: Process Raw Images"):
-<<<<<<< HEAD
         conn, cursor = init_db()
-=======
->>>>>>> 8bf44ef04b181bc2f2ad841cd166aab13476240f
         success_count = 0
         failed = []
 
@@ -105,7 +90,6 @@ else:
 
         for i, path in enumerate(raw_files):
             try:
-<<<<<<< HEAD
                 data = path.read_bytes()
                 raw_hash = sha256_bytes(data)
                 raw_phash = str(imagehash.phash(Image.open(path)))
@@ -132,18 +116,12 @@ else:
                 )
 
                 # ---------------- Process image ----------------
-=======
->>>>>>> 8bf44ef04b181bc2f2ad841cd166aab13476240f
                 image = Image.open(path)
                 if image.mode == 'RGBA':
                     image = image.convert('RGB')
                 arr = np.array(image)
 
-<<<<<<< HEAD
                 # Remove black borders
-=======
-                # ---------------- Remove black borders ----------------
->>>>>>> 8bf44ef04b181bc2f2ad841cd166aab13476240f
                 mask = np.all(arr > TOLERANCE, axis=-1)
                 coords = np.argwhere(mask)
                 if coords.size == 0:
@@ -154,11 +132,7 @@ else:
                 cropped = image.crop((x0, y0, x1, y1)) \
                     if (x1-x0 < image.width*0.95 or y1-y0 < image.height*0.95) else image
 
-<<<<<<< HEAD
                 # Aspect ratio classification
-=======
-                # ---------------- Aspect ratio classification ----------------
->>>>>>> 8bf44ef04b181bc2f2ad841cd166aab13476240f
                 w, h = cropped.size
                 ratio = w/h
                 if ratio < 0.6: category = "Extra Tall"
@@ -167,11 +141,7 @@ else:
                 elif 1.1 < ratio <= 1.8: category = "Landscape"
                 else: category = "Extra Wide"
 
-<<<<<<< HEAD
                 # Resize
-=======
-                # ---------------- Resize to category dimensions ----------------
->>>>>>> 8bf44ef04b181bc2f2ad841cd166aab13476240f
                 sizes = {
                     "Square": (512,512),
                     "Portrait": (512,717),
@@ -182,16 +152,11 @@ else:
                 target_w, target_h = sizes[category]
                 resized = cropped.resize((target_w,target_h), Image.Resampling.LANCZOS)
 
-<<<<<<< HEAD
                 # Save to processed folder
-=======
-                # ---------------- Save to Processed folder ----------------
->>>>>>> 8bf44ef04b181bc2f2ad841cd166aab13476240f
                 output_dir = PROCESSED_DIR / category
                 output_dir.mkdir(parents=True, exist_ok=True)
                 out_path = output_dir / path.name
                 resized.save(out_path)
-<<<<<<< HEAD
 
                 # Compute processed hash/phash
                 processed_hash = sha256_bytes(out_path.read_bytes())
@@ -221,9 +186,6 @@ else:
 
                 # Delete raw file
                 path.unlink()
-=======
-                path.unlink()  # remove original raw image
->>>>>>> 8bf44ef04b181bc2f2ad841cd166aab13476240f
                 success_count += 1
 
             except Exception as e:
@@ -234,11 +196,8 @@ else:
             progress_bar.progress((i+1)/total_raw)
             status_text.text(f"Processed {i+1}/{total_raw} images...")
 
-<<<<<<< HEAD
             conn.commit()
 
-=======
->>>>>>> 8bf44ef04b181bc2f2ad841cd166aab13476240f
         # ---------------- Summary ----------------
         st.success("Stage 0 processing complete!")
         st.write(f"Total images in Raw folder: {total_raw}")
@@ -247,8 +206,5 @@ else:
         if failed:
             st.warning("Failed images:")
             st.write(failed)
-<<<<<<< HEAD
 
         conn.close()
-=======
->>>>>>> 8bf44ef04b181bc2f2ad841cd166aab13476240f
