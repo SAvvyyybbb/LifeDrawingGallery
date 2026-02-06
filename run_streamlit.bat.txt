@@ -1,0 +1,16 @@
+@echo off
+REM ----------------------------------------
+REM Batch file to launch Streamlit Booter
+REM ----------------------------------------
+
+REM Activate your Python environment (optional)
+REM Uncomment and adjust the path if you use a virtual environment
+REM call C:\path\to\venv\Scripts\activate.bat
+
+REM Change directory to the folder containing Streamlit_booter.py
+cd /d %~dp0
+
+REM Run Streamlit
+streamlit run Streamlit_booter.py
+
+pause

@@ -1,0 +1,18 @@
+streamlit
+gspread
+discord.py
+aiohttp
+<<<<<<< HEAD
+asyncio
+=======
+nest_asyncio
+>>>>>>> 8bf44ef04b181bc2f2ad841cd166aab13476240f
+streamlit-autorefresh
+oauth2client
+requests
+pillow
+numpy
+pandas
+streamlit-cropper
+imagehash
+

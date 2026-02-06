@@ -1,0 +1,10 @@
+H:
+cd H:\GithubRepository\LifeDrawingGallery
+git add .
+git status
+git commit -m "Trying to fix pages."
+git push
+
+Get stuff from GH:
+
+git pull origin main --rebase

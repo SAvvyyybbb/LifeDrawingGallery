@@ -1,0 +1,29 @@
+name: Discord Announcer
+on:
+  schedule:
+    - cron: '0 11 * * 1'
+
+  workflow_dispatch:  # Allows manual triggering
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run script with debug
+        run: |
+          set -x  # Enable detailed command tracing
+          python Prompt_Scheduler.py  # Update this to match the location of your script
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}  # Secret for Google credentials (as JSON)
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}  # Secret for Discord webhook URL
