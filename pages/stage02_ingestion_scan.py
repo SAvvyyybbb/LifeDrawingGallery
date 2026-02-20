@@ -75,6 +75,7 @@ def init_db(db_path: Path):
     CREATE TABLE IF NOT EXISTS images (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         batch_id INTEGER,
+        veto INTEGER,
         file_path TEXT UNIQUE,
         is_stitched INTEGER DEFAULT 0,
         aspect_category TEXT,
