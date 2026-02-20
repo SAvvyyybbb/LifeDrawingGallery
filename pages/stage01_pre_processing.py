@@ -1,5 +1,4 @@
 # stage01_pre_processing.py
-
 import streamlit as st
 from pathlib import Path
 from PIL import Image
@@ -13,7 +12,7 @@ import config
 # ---------------- Config ----------------
 RAW_DIR = config.RAW_DIR
 PROCESSED_DIR = config.CLEANED_DIR
-TOLERANCE = getattr(config, "TOLERANCE", 10)
+TOLERANCE = config.TOLERANCE
 DB_PATH = config.DB_DIR / "image_data.db"
 
 # ---------------- Helpers ----------------
@@ -30,7 +29,7 @@ def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    # Raw images table with modified_hash
+    # Raw images table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS raw_image_data (
             hash TEXT PRIMARY KEY,
@@ -64,34 +63,21 @@ def init_db():
     conn.commit()
     return conn, cursor
 
-def find_raw_record(cursor, original_hash, filename):
+def find_raw_record(cursor, img_path, img_hash):
     """
-    Find raw record by first checking modified_hash, then fallback to hash.
-    Returns the canonical 'hash' from raw_image_data for deduplication.
+    Returns the raw hash from raw_image_data.
+    First check modified_hash (edited images),
+    then fallback to original hash.
     """
-    # 1️⃣ Check if original_hash matches any modified_hash
-    cursor.execute(
-        "SELECT hash FROM raw_image_data WHERE modified_hash=?",
-        (original_hash,)
-    )
+    cursor.execute("""
+        SELECT hash FROM raw_image_data
+        WHERE modified_hash=? OR hash=? OR original_filename=?
+    """, (img_hash, img_hash, img_path.name))
     row = cursor.fetchone()
-    if row:
-        return row[0]  # Return canonical raw hash
-
-    # 2️⃣ Fallback to matching original hash or filename
-    cursor.execute(
-        "SELECT hash FROM raw_image_data WHERE hash=? OR original_filename=?",
-        (original_hash, filename)
-    )
-    row = cursor.fetchone()
-    if row:
-        return row[0]
-
-    # 3️⃣ Not found
-    return None
+    return row[0] if row else None
 
 # ---------------- Streamlit UI ----------------
-st.title("Stage 1: Preprocess Raw Images (Optional)")
+st.title("Stage 1: Preprocess Raw Images (With Edited Images Support)")
 
 raw_files = [f for f in RAW_DIR.iterdir() if f.suffix.lower() in (".png", ".jpg", ".jpeg")]
 total_raw = len(raw_files)
@@ -111,13 +97,13 @@ else:
         for i, path in enumerate(raw_files):
             try:
                 data = path.read_bytes()
-                raw_hash = sha256_bytes(data)
-                raw_phash = str(imagehash.phash(Image.open(path)))
+                img_hash = sha256_bytes(data)
+                img_phash = str(imagehash.phash(Image.open(path)))
 
                 # ---------------- Skip if already processed ----------------
                 cursor.execute(
-                    "SELECT processing FROM raw_image_data WHERE hash=?",
-                    (raw_hash,)
+                    "SELECT processing FROM raw_image_data WHERE hash=? OR modified_hash=?",
+                    (img_hash, img_hash)
                 )
                 row = cursor.fetchone()
                 if row and row[0] == 1:
@@ -125,15 +111,12 @@ else:
                     progress_bar.progress((i+1)/total_raw)
                     continue
 
-                # ---------------- Log raw image if not exists ----------------
-                cursor.execute(
-                    """
+                # ---------------- Insert into raw table if missing ----------------
+                cursor.execute("""
                     INSERT OR IGNORE INTO raw_image_data 
                     (hash, phash, original_filename, created_at, processing)
                     VALUES (?, ?, ?, ?, 0)
-                    """,
-                    (raw_hash, raw_phash, path.name, datetime.now(timezone.utc).isoformat())
-                )
+                """, (img_hash, img_phash, path.name, datetime.now(timezone.utc).isoformat()))
 
                 # ---------------- Process image ----------------
                 image = Image.open(path)
@@ -161,7 +144,7 @@ else:
                 elif 1.1 < ratio <= 1.8: category = "Landscape"
                 else: category = "Extra Wide"
 
-                # Resize for processing
+                # Resize
                 sizes = {
                     "Square": (512,512),
                     "Portrait": (512,717),
@@ -182,20 +165,17 @@ else:
                 processed_hash = sha256_bytes(out_path.read_bytes())
                 processed_phash = str(imagehash.phash(resized))
 
-                # Link to canonical raw_image_data
-                linked_hash = find_raw_record(cursor, raw_hash, path.name)
+                # Link to raw_image_data via modified_hash first
+                linked_hash = find_raw_record(cursor, path, img_hash)
 
                 # Insert into processed_image_data
-                cursor.execute(
-                    """
+                cursor.execute("""
                     INSERT INTO processed_image_data (
                         hash, phash, original_hash, original_filename,
                         category, width, height, created_at
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (processed_hash, processed_phash, linked_hash, path.name,
-                     category, target_w, target_h, datetime.now(timezone.utc).isoformat())
-                )
+                """, (processed_hash, processed_phash, linked_hash, path.name,
+                      category, target_w, target_h, datetime.now(timezone.utc).isoformat()))
 
                 # Update raw processing flag
                 if linked_hash:

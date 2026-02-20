@@ -12,7 +12,10 @@ MODULES_DIR = Path(__file__).parent / "pages" / "modules"
 if MODULES_DIR.exists() and str(MODULES_DIR) not in sys.path:
     sys.path.insert(0, str(MODULES_DIR))
 
-from folder_preview import folder_preview_panel  # optional module
+try:
+    from folder_preview import folder_preview_panel  # optional module
+except ImportError:
+    folder_preview_panel = None
 
 # ---------------- Page Config ----------------
 st.set_page_config(
@@ -72,18 +75,26 @@ st.info("Select a stage from the sidebar or top menu to begin your workflow.")
 # ---------------- Folder Preview ----------------
 st.subheader("Cleaned Images Preview")
 CLEANED_DIR = config.CLEANED_DIR
-cleaned_images = sorted([p for p in CLEANED_DIR.iterdir() if p.suffix.lower() in (".png", ".jpg", ".jpeg")])
+CLEANED_DIR.mkdir(parents=True, exist_ok=True)  # <-- ensure folder exists
+
+# Collect images
+cleaned_images = sorted([
+    p for p in CLEANED_DIR.iterdir()
+    if p.suffix.lower() in (".png", ".jpg", ".jpeg")
+])
 
 total_images = len(cleaned_images)
 st.write(f"**Total Images in folder:** {total_images}")
 
+# Recently modified images (last 7 days)
 recent_threshold = time.time() - 7*24*60*60
 recent_images = [p for p in cleaned_images if p.stat().st_mtime >= recent_threshold]
 st.write(f"**Recently added/modified (last 7 days):** {len(recent_images)}")
 
-# Thumbnail Grid
+# ---------------- Thumbnail Grid ----------------
 thumb_cols = 6
 thumb_size = 120
+
 if total_images == 0:
     st.info("No images found in the cleaned folder.")
 else:
@@ -95,8 +106,11 @@ else:
             if idx >= total_images:
                 break
             img_path = cleaned_images[idx]
-            with Image.open(img_path) as im:
-                thumb = ImageOps.exif_transpose(im).convert("RGB")
-                thumb.thumbnail((thumb_size, thumb_size))
-            border_color = "#FF0000" if img_path in recent_images else "#CCCCCC"
-            cols[c].image(thumb, width=thumb_size, caption=img_path.name, use_column_width=False)
+            try:
+                with Image.open(img_path) as im:
+                    thumb = ImageOps.exif_transpose(im).convert("RGB")
+                    thumb.thumbnail((thumb_size, thumb_size))
+                border_color = "#FF0000" if img_path in recent_images else "#CCCCCC"
+                cols[c].image(thumb, width=thumb_size, caption=img_path.name, use_column_width=False)
+            except Exception as e:
+                st.warning(f"Failed to load thumbnail: {img_path.name} ({e})")
