@@ -4,7 +4,6 @@ import streamlit as st
 from pathlib import Path
 from PIL import Image, ImageOps
 import sqlite3
-import hashlib
 import time
 import subprocess
 import config
@@ -64,8 +63,9 @@ if st.button("Check Repository Status"):
         st.success("No local tracked changes detected.")
     else:
         st.warning(f"Detected {len(tracked_changes)} local tracked changes:")
-        for line in tracked_changes:
-            st.write(f"- {line}")
+        with st.expander("View tracked changes", expanded=False):
+            for line in tracked_changes:
+                st.write(f"- {line}")
 
 # --- Commit Changes Button ---
 commit_msg = st.text_input("Commit message for changes:", value="Update from Streamlit dashboard")
@@ -120,9 +120,9 @@ else:
     st.warning("Database changes detected:")
     for change_type, items in db_changes.items():
         if items:
-            st.write(f"**{change_type.capitalize()} ({len(items)} tables)**")
-            for i in items:
-                st.write(f"- {i}")
+            with st.expander(f"{change_type.capitalize()} ({len(items)} tables)", expanded=False):
+                for i in items:
+                    st.write(f"- {i}")
 
 st.markdown("---")
 
