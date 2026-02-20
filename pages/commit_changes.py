@@ -39,8 +39,15 @@ def git_status():
     return lines, None
 
 def git_commit(message="Commit via Streamlit"):
-    """Stage all changes and commit"""
+    """Stage all changes and commit with a local Git identity"""
+    # Stage all changes
     run_git(["add", "."])
+
+    # Set local user identity (repo-specific)
+    run_git(["config", "user.name", "Streamlit Bot"])
+    run_git(["config", "user.email", "bot@example.com"])
+
+    # Commit changes
     code, out, err = run_git(["commit", "-m", message])
     return code, out, err
 
@@ -80,7 +87,6 @@ def get_db_changes():
         current = {}
         try:
             rows = c.execute(f"SELECT * FROM {table}").fetchall()
-            # Use 'id' if exists, else fallback to rowid
             if rows and "id" in rows[0].keys():
                 current = {r["id"]: row_hash(r) for r in rows}
             else:
