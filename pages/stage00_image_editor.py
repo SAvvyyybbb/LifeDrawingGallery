@@ -38,6 +38,12 @@ if not all_images:
     st.info("No images found in this folder.")
     st.stop()
 
+# Reset selection if folder changes
+if "last_folder" not in st.session_state or st.session_state.last_folder != folder_choice:
+    st.session_state.selected = 0
+    st.session_state.thumb_page = 0
+    st.session_state.last_folder = folder_choice
+
 # ---------------- Thumbnail Pagination ----------------
 THUMBS_PER_PAGE = 24
 NUM_COLS = 8
@@ -45,6 +51,8 @@ total_pages = math.ceil(len(all_images) / THUMBS_PER_PAGE)
 
 if "thumb_page" not in st.session_state:
     st.session_state.thumb_page = 0
+if "selected" not in st.session_state:
+    st.session_state.selected = 0
 
 col1, col2, col3 = st.columns([1,2,1])
 with col1:
@@ -70,9 +78,6 @@ for i, img_path in enumerate(thumb_images):
             st.session_state.selected = start_idx + i
         st.image(thumb, width=80)
 
-if "selected" not in st.session_state:
-    st.session_state.selected = 0
-
 current_image_path = all_images[st.session_state.selected]
 st.write(f"**Editing [{st.session_state.selected+1}/{len(all_images)}]: {current_image_path.name}**")
 
@@ -82,15 +87,14 @@ image = Image.open(current_image_path)
 st.markdown("---")
 st.subheader("Rotate & Crop")
 
-# Slider for rotation: 0–360 degrees
 angle = st.slider(
     "Rotate Image (degrees)",
-    min_value=0,
-    max_value=360,
+    min_value=-180,
+    max_value=180,
     value=0,
-    step=1
+    step=1,
+    help="Negative rotates left, positive rotates right"
 )
-
 rotated = image.rotate(angle, expand=True)
 
 # ---------------- Crop with Aspect Ratio ----------------
@@ -99,7 +103,7 @@ ratio_choice = st.selectbox(
     ["None","Square","Portrait","Landscape","Extra Tall","Extra Wide"]
 )
 
-# Use tuples for width:height ratios
+# Aspect ratio tuples (width, height)
 aspect_map = {
     "None": None,
     "Square": (1,1),
@@ -119,7 +123,7 @@ cropped_img = st_cropper(
 
 st.image(cropped_img, caption="Preview of Crop", use_column_width=True)
 
-# ---------------- Save / Next ----------------
+# ---------------- Save / Next / Reset ----------------
 col_save, col_next, col_reset = st.columns(3)
 
 def classify_aspect(img):
@@ -139,15 +143,20 @@ def classify_aspect(img):
 
 with col_save:
     if st.button("Save Edited Image"):
-        cropped_img.save(current_image_path)
-        category = classify_aspect(cropped_img)
-        st.success(f"Saved — Aspect Category: {category}")
-        st.balloons()
+        try:
+            cropped_img.save(current_image_path)
+            category = classify_aspect(cropped_img)
+            st.success(f"Saved — Aspect Category: {category}")
+            st.balloons()
+        except Exception as e:
+            st.error(f"Error saving image: {e}")
 
 with col_next:
     if st.button("Save & Next"):
-        cropped_img.save(current_image_path)
-        category = classify_aspect(cropped_img)
+        try:
+            cropped_img.save(current_image_path)
+        except Exception as e:
+            st.error(f"Error saving image: {e}")
         if st.session_state.selected < len(all_images)-1:
             st.session_state.selected += 1
         # Update thumbnail page if needed
