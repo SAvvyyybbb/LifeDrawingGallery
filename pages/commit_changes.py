@@ -6,8 +6,8 @@ import subprocess
 import sqlite3
 import hashlib
 import os
-import shlex
 import config
+import shlex
 
 # ---------------- Add modules folder to path ----------------
 MODULES_DIR = Path(__file__).parent / "modules"
@@ -23,34 +23,27 @@ st.set_page_config(
 # ---------------- Git Helpers ----------------
 REPO_DIR = config.IMAGE_PROCESSING_DIR.resolve()
 
-# ---------------- Deploy Key Setup ----------------
-# Write the deploy key from Streamlit secrets to a file
-DEPLOY_KEY_PATH = REPO_DIR / "streamlit_deploy_key"
-DEPLOY_KEY_PATH.write_text(st.secrets["GITHUB_SSH_KEY"])
-os.chmod(DEPLOY_KEY_PATH, 0o600)
+# ---------------- HTTPS + PAT Setup ----------------
+# Make sure your Streamlit secret GITHUB_TOKEN contains your PAT
+GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
+GITHUB_USER = "SAvvyyybbb"  # your GitHub username
+REPO_NAME = "LifeDrawingGallery"
 
-# Quote the path to handle spaces in folder names
-deploy_key_quoted = shlex.quote(str(DEPLOY_KEY_PATH))
+HTTPS_REMOTE = f"https://{GITHUB_USER}:{GITHUB_TOKEN}@github.com/{GITHUB_USER}/{REPO_NAME}.git"
 
-# Environment for all Git commands
-GIT_ENV = os.environ.copy()
-GIT_ENV["GIT_SSH_COMMAND"] = f"ssh -i {deploy_key_quoted} -o IdentitiesOnly=yes"
-
-# Ensure the remote uses SSH
+# Ensure the repo uses HTTPS with token
 subprocess.run(
-    ["git", "remote", "set-url", "origin", "git@github.com:SAvvyyybbb/LifeDrawingGallery.git"],
-    cwd=REPO_DIR,
-    env=GIT_ENV
+    ["git", "remote", "set-url", "origin", HTTPS_REMOTE],
+    cwd=REPO_DIR
 )
 
 def run_git(args):
-    """Run Git in the repo using the deploy key"""
+    """Run Git in the repo using HTTPS + PAT"""
     result = subprocess.run(
         ["git"] + args,
         cwd=REPO_DIR,
         capture_output=True,
-        text=True,
-        env=GIT_ENV
+        text=True
     )
     return result.returncode, result.stdout.strip(), result.stderr.strip()
 
@@ -63,31 +56,28 @@ def git_status():
 
 def git_commit(message="Commit via Streamlit"):
     """Stage all changes and commit with a local Git identity"""
-    # Stage all changes
     run_git(["add", "."])
 
     # Set repo-local Git identity
     run_git(["config", "user.name", "Streamlit Bot"])
     run_git(["config", "user.email", "bot@example.com"])
 
-    # Commit
     code, out, err = run_git(["commit", "-m", message])
 
-    # Handle nothing to commit
     if code != 0 and err and "nothing to commit" in err.lower():
         return 0, "No changes to commit.", None
 
     return code, out, err
 
 def git_push():
-    """Push commits using SSH deploy key"""
+    """Push commits using HTTPS + PAT"""
     code, out, err = run_git(["push"])
     if code == 0:
         return True, "✅ Changes pushed to GitHub successfully."
     else:
         msg = err or out
-        if "Permission denied" in msg:
-            msg += "\n⚠️ SSH authentication failed. Check your deploy key."
+        if "Permission denied" in msg or "Authentication failed" in msg:
+            msg += "\n⚠️ Check your GitHub token and repo URL."
         return False, msg
 
 # ---------------- DB Change Tracker ----------------
