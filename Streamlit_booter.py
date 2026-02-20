@@ -35,16 +35,22 @@ def run_git(args):
 
 st.subheader("Repository Sync Status (Restricted)")
 
-code, out, err = run_git(["pull", "--rebase"])
-if code == 0:
-    st.success("Repository inside Image Processing folder is up to date ✅")
-    if out:
-        st.info(f"Git output:\n{out}")
+# Run pull only once per session
+if "git_synced" not in st.session_state:
+    code, out, err = run_git(["pull", "--rebase"])
+    st.session_state.git_synced = True  # mark as done
+
+    if code == 0:
+        st.success("Repository inside Image Processing folder is up to date ✅")
+        if out:
+            st.info(f"Git output:\n{out}")
+    else:
+        st.error("Failed to pull updates ⚠️")
+        if err:
+            st.error(f"Git error:\n{err}")
+        st.warning("Resolve conflicts manually before continuing.")
 else:
-    st.error("Failed to pull updates ⚠️")
-    if err:
-        st.error(f"Git error:\n{err}")
-    st.warning("Resolve conflicts manually before continuing.")
+    st.info("Repository sync already performed this session.")
 
 # ---------------- Landing Content ----------------
 st.title("UV Map Stitcher Dashboard")
