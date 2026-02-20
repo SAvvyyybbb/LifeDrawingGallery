@@ -15,7 +15,7 @@ st.title("Batch Layout & Manual Ordering (Data Editor)")
 
 # ---------------- Verify DB ----------------
 if not DB_PATH.exists():
-    st.error(f"Database file does not exist: {DB_PATH}")
+    st.warning(f"Database file does not exist: {DB_PATH}")
     st.stop()
 
 conn = sqlite3.connect(DB_PATH)
@@ -23,12 +23,13 @@ conn = sqlite3.connect(DB_PATH)
 # ---------------- Helpers ----------------
 def load_batches():
     df = pd.read_sql("SELECT * FROM batches ORDER BY id", conn)
-    df.columns = [
-        'id', 'primary_folder', 'aspect_ratio', 'secondary_folder', 'batch_name',
-        'width', 'height', 'batch_number', 'timestamp'
-    ]
-    df['primary_folder'] = df['primary_folder'].astype(str).str.strip()
-    df['aspect_ratio'] = df['aspect_ratio'].astype(str).str.strip()
+    if not df.empty:
+        df.columns = [
+            'id', 'primary_folder', 'aspect_ratio', 'secondary_folder', 'batch_name',
+            'width', 'height', 'batch_number', 'timestamp'
+        ]
+        df['primary_folder'] = df['primary_folder'].astype(str).str.strip()
+        df['aspect_ratio'] = df['aspect_ratio'].astype(str).str.strip()
     return df
 
 def load_images(batch_id):
@@ -72,7 +73,6 @@ def render_batch_preview(df_ordered, scale=0.25):
                 break
             row = df_ordered.iloc[idx]
             try:
-                # ---------- READ IMAGE FROM CLEANED FOLDER ----------
                 img_name = Path(row["file_path"]).name
                 img_path = CLEANED_DIR / row["aspect_category"] / img_name
                 img = Image.open(img_path).convert("RGB")
@@ -106,7 +106,8 @@ def render_batch_preview(df_ordered, scale=0.25):
 # ---------------- Main Workflow ----------------
 df_batches = load_batches()
 if df_batches.empty:
-    st.warning("No batches found in database.")
+    st.info("No batches found in the database. Create some batches first to preview images.")
+    conn.close()
     st.stop()
 
 # ---------------- Batch Selection ----------------
@@ -131,6 +132,7 @@ selected_batch_id = st.selectbox(
 df_images = load_images(selected_batch_id)
 if df_images.empty:
     st.warning("No images found for this batch.")
+    conn.close()
     st.stop()
 
 st.subheader("Batch Preview")
