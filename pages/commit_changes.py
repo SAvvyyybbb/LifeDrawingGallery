@@ -5,7 +5,6 @@ from pathlib import Path
 import subprocess
 import sqlite3
 import config
-import time
 import hashlib
 
 # ---------------- Add modules folder to path ----------------
@@ -62,7 +61,6 @@ def get_db_changes():
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
 
-    # Get all table names
     try:
         c.execute("SELECT name FROM sqlite_master WHERE type='table';")
         tables = [t[0] for t in c.fetchall()]
@@ -86,7 +84,6 @@ def get_db_changes():
             if rows and "id" in rows[0].keys():
                 current = {r["id"]: row_hash(r) for r in rows}
             else:
-                # fallback rowid
                 rows = c.execute(f"SELECT rowid, * FROM {table}").fetchall()
                 current = {r["rowid"]: row_hash(r) for r in rows}
         except sqlite3.OperationalError:
@@ -108,7 +105,6 @@ def get_db_changes():
         for rid, rhash in current.items():
             new_snapshot_lines.append(f"{table}|{rid}|{rhash}")
 
-    # Update snapshot
     with open(SNAPSHOT_FILE, "w", encoding="utf-8") as f:
         for line in new_snapshot_lines:
             f.write(line + "\n")
@@ -118,7 +114,6 @@ def get_db_changes():
 
 # ---------------- Folder Tracker ----------------
 def get_folder_changes():
-    """Compare current subfolders and images to snapshot"""
     IMAGE_DIR = config.IMAGE_PROCESSING_DIR
     snapshot_file = IMAGE_DIR / ".folder_snapshot.txt"
 
@@ -140,7 +135,6 @@ def get_folder_changes():
     modified = {k: (previous_folders[k], current_folders[k])
                 for k in current_folders if k in previous_folders and previous_folders[k] != current_folders[k]}
 
-    # Update snapshot
     with open(snapshot_file, "w", encoding="utf-8") as f:
         for name, count in current_folders.items():
             f.write(f"{name}|{count}\n")
@@ -152,19 +146,13 @@ st.title("Repository Commit & Database Tracker")
 
 # ---------------- Git Status ----------------
 st.subheader("Check Repository Status")
-IGNORED_PATTERNS = [
-    ".streamlit/",
-]
+IGNORED_PATTERNS = [".streamlit/"]
 
 def filter_git_status(lines):
     filtered = []
     for line in lines:
-        # line format: XY <path>
         path = line[3:] if len(line) > 3 else line
-        # ignore .streamlit and any __pycache__ recursively
-        if path.startswith(".streamlit/"):
-            continue
-        if "__pycache__" in path:
+        if path.startswith(".streamlit/") or "__pycache__" in path:
             continue
         filtered.append(line)
     return filtered
@@ -211,7 +199,7 @@ else:
             for f, c in removed.items():
                 st.write(f"{f}: {c} images")
     if modified:
-        with st.expander(f"Modified Folders ({len(modified})}"):
+        with st.expander(f"Modified Folders ({len(modified)})"):
             for f, counts in modified.items():
                 st.write(f"{f}: {counts[0]} → {counts[1]} images")
 
