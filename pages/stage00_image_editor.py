@@ -1,4 +1,5 @@
 # pages/stage00_image_editor.py
+
 import streamlit as st
 from pathlib import Path
 from PIL import Image
@@ -7,6 +8,7 @@ import config
 import math
 import sqlite3
 import hashlib
+import imagehash
 from datetime import datetime, timezone
 
 # ---------------- Page Config ----------------
@@ -20,39 +22,74 @@ st.title("LifeDrawingGallery — Image Crop & Rotate")
 # ---------------- Database ----------------
 DB_PATH = config.DB_DIR / "image_data.db"
 
-def sha256_bytes(data: bytes):
-    return hashlib.sha256(data).hexdigest()
 
-def update_modified_hash(filename, original_hash, modified_hash):
+# ---------------- Schema Guard ----------------
+def ensure_schema():
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+
+    cur.execute("PRAGMA table_info(raw_image_data)")
+    cols = [c[1] for c in cur.fetchall()]
+
+    if "modified_hash" not in cols:
+        cur.execute("ALTER TABLE raw_image_data ADD COLUMN modified_hash TEXT")
+
+    if "updated_at" not in cols:
+        cur.execute("ALTER TABLE raw_image_data ADD COLUMN updated_at TEXT")
+
+    if "processing" not in cols:
+        cur.execute("ALTER TABLE raw_image_data ADD COLUMN processing INTEGER DEFAULT 0")
+
+    conn.commit()
+    conn.close()
+
+
+ensure_schema()
+
+
+# ---------------- Hash Helper ----------------
+def sha256_file(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+# ---------------- DB Update Logic ----------------
+def update_modified_hash(original_filename, modified_hash):
     """
-    Update existing record with modified hash.
+    Updates the modified hash for the *existing* raw record.
 
     Matching priority:
-        filename → original_hash → modified_hash
+    1) original_filename
+    2) existing modified_hash
+    3) original hash match
 
-    This guarantees edits always attach to the correct original record.
+    Never inserts rows.
     """
+
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     cursor.execute("""
         UPDATE raw_image_data
-        SET modified_hash=?,
-            processing=0,
-            updated_at=?
-        WHERE original_filename=?
-           OR original_hash=?
-           OR modified_hash=?
+        SET modified_hash = ?,
+            processing = 0,
+            updated_at = ?
+        WHERE original_filename = ?
+           OR modified_hash = ?
+           OR hash = ?
     """, (
         modified_hash,
         datetime.now(timezone.utc).isoformat(),
-        filename,
-        original_hash,
-        original_hash
+        original_filename,
+        modified_hash,
+        modified_hash
     ))
 
     conn.commit()
+    affected = cursor.rowcount
     conn.close()
+
+    return affected
+
 
 # ---------------- Raw Folder ----------------
 IMAGE_DIR = config.RAW_DIR
@@ -64,14 +101,17 @@ if not IMAGE_DIR.exists():
 all_images = sorted(
     [p for p in IMAGE_DIR.iterdir() if p.suffix.lower() in (".png", ".jpg", ".jpeg")]
 )
+
 if not all_images:
     st.info("No images found in Raw folder.")
     st.stop()
 
-# Reset selection if not already in session
+
+# ---------------- Session State ----------------
 if "selected" not in st.session_state:
     st.session_state.selected = 0
     st.session_state.thumb_page = 0
+
 
 # ---------------- Thumbnail Pagination ----------------
 THUMBS_PER_PAGE = 24
@@ -79,9 +119,11 @@ NUM_COLS = 8
 total_pages = math.ceil(len(all_images) / THUMBS_PER_PAGE)
 
 col1, col2, col3 = st.columns([1,2,1])
+
 with col1:
     if st.button("Previous Page") and st.session_state.thumb_page > 0:
         st.session_state.thumb_page -= 1
+
 with col3:
     if st.button("Next Page") and st.session_state.thumb_page < total_pages-1:
         st.session_state.thumb_page += 1
@@ -92,8 +134,10 @@ start_idx = st.session_state.thumb_page * THUMBS_PER_PAGE
 end_idx = min(start_idx + THUMBS_PER_PAGE, len(all_images))
 thumb_images = all_images[start_idx:end_idx]
 
-# ---------------- Thumbnails ----------------
+
+# ---------------- Thumbnail Grid ----------------
 cols = st.columns(NUM_COLS)
+
 for i, img_path in enumerate(thumb_images):
     with cols[i % NUM_COLS]:
         thumb = Image.open(img_path)
@@ -102,10 +146,12 @@ for i, img_path in enumerate(thumb_images):
             st.session_state.selected = start_idx + i
         st.image(thumb, width=80)
 
+
 current_image_path = all_images[st.session_state.selected]
 st.write(f"**Editing [{st.session_state.selected+1}/{len(all_images)}]: {current_image_path.name}**")
 
 image = Image.open(current_image_path)
+
 
 # ---------------- Rotate ----------------
 st.markdown("---")
@@ -116,11 +162,13 @@ angle = st.slider(
     min_value=-180,
     max_value=180,
     value=0,
-    step=1,
+    step=1
 )
+
 rotated = image.rotate(angle, expand=True)
 
-# ---------------- Aspect Ratio ----------------
+
+# ---------------- Aspect Ratio Crop ----------------
 ratio_choice = st.selectbox(
     "Constrain Crop Aspect Ratio",
     ["None","Square","Portrait","Landscape","Extra Tall","Extra Wide"]
@@ -134,81 +182,72 @@ aspect_map = {
     "Extra Tall": (1,2),
     "Extra Wide": (2,1)
 }
-crop_ratio = aspect_map[ratio_choice]
 
 cropped_img = st_cropper(
     rotated,
     realtime_update=True,
-    aspect_ratio=crop_ratio,
+    aspect_ratio=aspect_map[ratio_choice],
     box_color="#FF0000"
 )
 
-st.image(cropped_img, caption="Preview of Crop", use_column_width=True)
+st.image(cropped_img, caption="Preview of Crop", width="stretch")
 
-# ---------------- Aspect Classification ----------------
+
+# ---------------- Aspect Classifier ----------------
 def classify_aspect(img):
     w,h = img.size
     ratio = w/h
     if ratio < 0.6:
         return "Extra Tall"
-    elif 0.6 <= ratio < 0.9:
+    elif ratio < 0.9:
         return "Portrait"
-    elif 0.9 <= ratio <= 1.1:
+    elif ratio <= 1.1:
         return "Square"
-    elif 1.1 < ratio <= 1.8:
+    elif ratio <= 1.8:
         return "Landscape"
     else:
         return "Extra Wide"
 
+
 # ---------------- Save Logic ----------------
-def save_edit_and_update_db(path, cropped_img):
+def save_edit(move_next=False):
     try:
-        # hash BEFORE overwrite
-        original_bytes = path.read_bytes()
-        original_hash = sha256_bytes(original_bytes)
+        cropped_img.save(current_image_path)
 
-        # overwrite file
-        cropped_img.save(path)
+        new_hash = sha256_file(current_image_path)
+        updated = update_modified_hash(current_image_path.name, new_hash)
 
-        # hash AFTER overwrite
-        new_bytes = path.read_bytes()
-        modified_hash = sha256_bytes(new_bytes)
+        category = classify_aspect(cropped_img)
 
-        # update DB record
-        update_modified_hash(path.name, original_hash, modified_hash)
+        if updated == 0:
+            st.warning("No database record matched this image.")
+        else:
+            st.success(f"Saved — Category: {category}")
 
-        return modified_hash
+        if move_next:
+            if st.session_state.selected < len(all_images)-1:
+                st.session_state.selected += 1
+
+            if st.session_state.selected >= end_idx and st.session_state.thumb_page < total_pages-1:
+                st.session_state.thumb_page += 1
+
+            st.rerun()
 
     except Exception as e:
         st.error(f"Save failed: {e}")
-        return None
+
 
 # ---------------- Buttons ----------------
 col_save, col_next, col_reset = st.columns(3)
 
-# Save
 with col_save:
     if st.button("Save Edited Image"):
-        mod_hash = save_edit_and_update_db(current_image_path, cropped_img)
-        if mod_hash:
-            category = classify_aspect(cropped_img)
-            st.success(f"Saved ✓  | Aspect: {category}")
-            st.balloons()
+        save_edit(False)
 
-# Save + Next
 with col_next:
     if st.button("Save & Next"):
-        save_edit_and_update_db(current_image_path, cropped_img)
+        save_edit(True)
 
-        if st.session_state.selected < len(all_images)-1:
-            st.session_state.selected += 1
-
-        if st.session_state.selected >= end_idx and st.session_state.thumb_page < total_pages-1:
-            st.session_state.thumb_page += 1
-
-        st.experimental_rerun()
-
-# Reset
 with col_reset:
     if st.button("Reset Edits"):
-        st.experimental_rerun()
+        st.rerun()
