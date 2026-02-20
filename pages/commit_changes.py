@@ -2,8 +2,8 @@
 import sys
 import streamlit as st
 from pathlib import Path
-import sqlite3
 import subprocess
+import sqlite3
 import config
 import time
 import hashlib
@@ -15,57 +15,75 @@ if MODULES_DIR.exists() and str(MODULES_DIR) not in sys.path:
 
 # ---------------- Page Config ----------------
 st.set_page_config(
-    page_title="UV Map Commit & Tracker",
+    page_title="Repository Commit & DB Tracker",
     layout="wide"
 )
 
-# ---------------- Helper Functions ----------------
-def run_git(args, repo_dir=config.IMAGE_PROCESSING_DIR):
-    """Run a git command restricted to IMAGE_PROCESSING_DIR."""
+# ---------------- Git Helpers ----------------
+REPO_DIR = config.IMAGE_PROCESSING_DIR.resolve()
+
+def run_git(args):
+    """Run git commands restricted to IMAGE_PROCESSING_DIR"""
     result = subprocess.run(
         ["git"] + args,
-        cwd=repo_dir,
+        cwd=REPO_DIR,
         capture_output=True,
         text=True
     )
     return result.returncode, result.stdout.strip(), result.stderr.strip()
 
+def git_status():
+    code, out, err = run_git(["status", "--porcelain"])
+    if code != 0:
+        return [], err
+    lines = out.splitlines()
+    return lines, None
+
+def git_commit(message="Commit via Streamlit"):
+    """Stage all changes and commit"""
+    run_git(["add", "."])
+    code, out, err = run_git(["commit", "-m", message])
+    return code, out, err
+
+# ---------------- DB Change Tracker ----------------
+SNAPSHOT_FILE = REPO_DIR / ".db_snapshot.txt"
+
 def row_hash(row):
-    """Generate a hash of a database row (ignoring id and batch_id)."""
-    vals = [str(row[k]) for k in row.keys() if k not in ("id", "batch_id")]
-    return hashlib.md5("|".join(vals).encode("utf-8")).hexdigest()
+    """Compute a hash for a DB row (ignores internal ordering)"""
+    return hashlib.md5(str(tuple(row)).encode("utf-8")).hexdigest()
 
 def get_db_changes():
-    """Detect added/modified/removed rows in the main DB tables."""
-    DB_PATH = config.DB_PATH
-    if not DB_PATH.exists():
-        return {"added": {}, "modified": {}, "removed": {}}
+    changes = {"added": {}, "modified": {}, "removed": {}}
+    db_path = config.DB_PATH
+    if not db_path.exists():
+        return changes
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
 
-    # Only consider tables we know
-    tables = ["images", "batches"]
-    changes = {"added": {}, "modified": {}, "removed": {}}
+    try:
+        c.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        tables = [t[0] for t in c.fetchall()]
+    except Exception:
+        tables = []
 
-    snapshot_file = DB_PATH.parent / ".db_snapshot.txt"
     previous_snapshot = {}
-
-    if snapshot_file.exists():
-        with open(snapshot_file, "r", encoding="utf-8") as f:
+    if SNAPSHOT_FILE.exists():
+        with open(SNAPSHOT_FILE, "r", encoding="utf-8") as f:
             for line in f:
-                table_name, rowid, rhash = line.strip().split("|")
-                previous_snapshot.setdefault(table_name, {})[int(rowid)] = rhash
+                table, rid, rhash = line.strip().split("|")
+                previous_snapshot.setdefault(table, {})[int(rid)] = rhash
+
+    new_snapshot_lines = []
 
     for table in tables:
+        current = {}  # Initialize to avoid UnboundLocalError
         try:
             rows = c.execute(f"SELECT * FROM {table}").fetchall()
+            current = {r["id"]: row_hash(r) for r in rows}
         except sqlite3.OperationalError:
-            # Table does not exist
             continue
-
-        current = {r["id"]: row_hash(r) for r in rows}
 
         prev_rows = previous_snapshot.get(table, {})
 
@@ -73,159 +91,112 @@ def get_db_changes():
         removed = {rid: h for rid, h in prev_rows.items() if rid not in current}
         modified = {rid: h for rid, h in current.items() if rid in prev_rows and prev_rows[rid] != h}
 
-        changes["added"][table] = added
-        changes["removed"][table] = removed
-        changes["modified"][table] = modified
+        if added:
+            changes["added"][table] = added
+        if removed:
+            changes["removed"][table] = removed
+        if modified:
+            changes["modified"][table] = modified
+
+        for rid, rhash in current.items():
+            new_snapshot_lines.append(f"{table}|{rid}|{rhash}")
+
+    # Update snapshot
+    with open(SNAPSHOT_FILE, "w", encoding="utf-8") as f:
+        for line in new_snapshot_lines:
+            f.write(line + "\n")
 
     conn.close()
-
-    # Update snapshot file
-    with open(snapshot_file, "w", encoding="utf-8") as f:
-        for table in tables:
-            for rid, rhash in current.items():
-                f.write(f"{table}|{rid}|{rhash}\n")
-
     return changes
 
-# ---------------- Landing Content ----------------
-st.title("Commit Changes & Tracker Dashboard")
-st.write("""
-Monitor repository, database, and image processing folder changes.
-You can review changes and commit directly from this page.
-""")
+# ---------------- Folder Tracker ----------------
+def get_folder_changes():
+    """Compare current subfolders and images to snapshot"""
+    IMAGE_DIR = config.IMAGE_PROCESSING_DIR
+    snapshot_file = IMAGE_DIR / ".folder_snapshot.txt"
 
-st.markdown("---")
+    current_folders = {}
+    for folder in IMAGE_DIR.iterdir():
+        if folder.is_dir():
+            imgs = [p for p in folder.rglob("*") if p.suffix.lower() in (".png", ".jpg", ".jpeg")]
+            current_folders[folder.name] = len(imgs)
 
-# ---------------- Git Repository Status ----------------
-st.subheader("Git Repository Status (Restricted to Image Processing Folder)")
+    previous_folders = {}
+    if snapshot_file.exists():
+        with open(snapshot_file, "r", encoding="utf-8") as f:
+            for line in f:
+                name, count = line.strip().split("|")
+                previous_folders[name] = int(count)
 
+    added = {k: v for k, v in current_folders.items() if k not in previous_folders}
+    removed = {k: v for k, v in previous_folders.items() if k not in current_folders}
+    modified = {k: (previous_folders[k], current_folders[k])
+                for k in current_folders if k in previous_folders and previous_folders[k] != current_folders[k]}
+
+    # Update snapshot
+    with open(snapshot_file, "w", encoding="utf-8") as f:
+        for name, count in current_folders.items():
+            f.write(f"{name}|{count}\n")
+
+    return added, removed, modified
+
+# ---------------- UI ----------------
+st.title("Repository Commit & Database Tracker")
+
+# ---------------- Git Status ----------------
+st.subheader("Check Repository Status")
 if st.button("Check Repository Status"):
-    code, out, err = run_git(["status", "--porcelain"])
-    if code != 0:
+    lines, err = git_status()
+    if err:
         st.error(f"Git error: {err}")
     else:
-        lines = out.splitlines()
-        st.write(f"Detected {len(lines)} local changes:")
-        if lines:
-            with st.expander("Local Changes", expanded=True):
-                for line in lines:
-                    st.write(f"- {line}")
-        else:
-            st.success("No local changes detected.")
-
-st.divider()
+        st.info(f"Detected {len(lines)} local changes:")
+        for l in lines:
+            st.text(l)
 
 # ---------------- Database Changes ----------------
+st.markdown("---")
 st.subheader("Database Changes")
-
 db_changes = get_db_changes()
 if not any(db_changes.values()):
     st.success("No database changes detected.")
 else:
-    for change_type in ["added", "modified", "removed"]:
-        total = sum(len(v) for v in db_changes[change_type].values())
-        if total:
-            with st.expander(f"{change_type.capitalize()} rows ({total})", expanded=False):
-                for table, rows in db_changes[change_type].items():
-                    if rows:
-                        st.write(f"**Table: {table}**")
-                        for rid in rows:
-                            st.write(f"- Row ID: {rid}")
+    for change_type, tables in db_changes.items():
+        with st.expander(f"{change_type.capitalize()} ({sum(len(v) for v in tables.values())} rows)"):
+            for table, rows in tables.items():
+                st.write(f"**Table {table}:** {len(rows)} rows")
+                # Display row IDs only
+                st.text(", ".join(str(rid) for rid in rows))
 
-st.divider()
-
-# ---------------- Folder & Image Tracker ----------------
+# ---------------- Folder Tracker ----------------
+st.markdown("---")
 st.subheader("Image Processing Folder Tracker")
-
-ROOT_TRACK_DIR = config.IMAGE_PROCESSING_DIR
-if ROOT_TRACK_DIR.exists():
-    # Map current folders and images recursively
-    current_folders = [p for p in ROOT_TRACK_DIR.rglob("*") if p.is_dir()]
-    folder_summary = []
-
-    for folder in current_folders:
-        images = sorted([p for p in folder.rglob("*") if p.suffix.lower() in (".png", ".jpg", ".jpeg")])
-        folder_summary.append({
-            "folder": str(folder.relative_to(ROOT_TRACK_DIR)),
-            "image_count": len(images),
-            "image_paths": images
-        })
-
-    # Compare with previous snapshot
-    snapshot_file = ROOT_TRACK_DIR / ".folder_snapshot.txt"
-    previous_snapshot = {}
-    if snapshot_file.exists():
-        with open(snapshot_file, "r", encoding="utf-8") as f:
-            for line in f:
-                parts = line.strip().split("|")
-                if len(parts) == 2:
-                    prev_folder, prev_count = parts
-                    previous_snapshot[prev_folder] = int(prev_count)
-
-    new_folders = []
-    deleted_folders = []
-    modified_folders = []
-
-    for f in folder_summary:
-        name = f["folder"]
-        count = f["image_count"]
-        prev_count = previous_snapshot.get(name)
-        if prev_count is None:
-            new_folders.append((name, count))
-        elif prev_count != count:
-            modified_folders.append((name, prev_count, count))
-
-    for prev_name in previous_snapshot:
-        if prev_name not in [f["folder"] for f in folder_summary]:
-            deleted_folders.append(prev_name)
-
-    # Display results
-    if new_folders:
-        with st.expander(f"New Folders ({len(new_folders)})", expanded=True):
-            for name, count in new_folders:
-                st.write(f"- {name}: {count} images")
-
-    if modified_folders:
-        with st.expander(f"Modified Folders ({len(modified_folders)})", expanded=False):
-            for name, prev_count, count in modified_folders:
-                st.write(f"- {name}: {prev_count} → {count} images")
-
-    if deleted_folders:
-        with st.expander(f"Deleted Folders ({len(deleted_folders)})", expanded=False):
-            for name in deleted_folders:
-                st.write(f"- {name}")
-
-    if not (new_folders or modified_folders or deleted_folders):
-        st.success("No folder changes detected.")
-
-    # Update snapshot for next run
-    with open(snapshot_file, "w", encoding="utf-8") as f:
-        for fsum in folder_summary:
-            f.write(f"{fsum['folder']}|{fsum['image_count']}\n")
+added, removed, modified = get_folder_changes()
+if not added and not removed and not modified:
+    st.success("No folder or image count changes detected.")
 else:
-    st.warning(f"Image Processing folder not found: {ROOT_TRACK_DIR}")
+    if added:
+        with st.expander(f"New Folders ({len(added)})"):
+            for f, c in added.items():
+                st.write(f"{f}: {c} images")
+    if removed:
+        with st.expander(f"Removed Folders ({len(removed)})"):
+            for f, c in removed.items():
+                st.write(f"{f}: {c} images")
+    if modified:
+        with st.expander(f"Modified Folders ({len(modified)})"):
+            for f, counts in modified.items():
+                st.write(f"{f}: {counts[0]} → {counts[1]} images")
 
-st.divider()
-
-# ---------------- Commit Button ----------------
-st.subheader("Commit Changes")
-
-commit_message = st.text_input("Commit message:", value="Update changes from Streamlit dashboard")
-if st.button("Commit & Push Changes"):
-    # Stage all changes in IMAGE_PROCESSING_DIR
-    code, out, err = run_git(["add", "."], repo_dir=config.IMAGE_PROCESSING_DIR)
-    if code != 0:
-        st.error(f"Git add failed: {err}")
-    else:
-        code, out, err = run_git(["commit", "-m", commit_message], repo_dir=config.IMAGE_PROCESSING_DIR)
-        if code != 0:
-            st.warning(f"Commit may have failed (nothing to commit?): {err}")
-        else:
-            st.success("Changes committed successfully.")
+# ---------------- Commit Changes ----------------
+st.markdown("---")
+st.subheader("Commit Changes to Repository")
+commit_msg = st.text_input("Commit message", value="Commit via Streamlit")
+if st.button("Commit Changes"):
+    code, out, err = git_commit(commit_msg)
+    if code == 0:
+        st.success("Changes committed successfully ✅")
+        if out:
             st.info(out)
-            # Push
-            code, out, err = run_git(["push"], repo_dir=config.IMAGE_PROCESSING_DIR)
-            if code != 0:
-                st.error(f"Push failed: {err}")
-            else:
-                st.success("Changes pushed to remote successfully.")
+    else:
+        st.error(f"Commit failed: {err}")
