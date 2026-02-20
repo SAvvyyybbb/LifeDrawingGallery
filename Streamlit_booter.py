@@ -4,7 +4,6 @@ import streamlit as st
 from pathlib import Path
 from PIL import Image, ImageOps
 import time
-import sqlite3
 import config
 import subprocess
 
@@ -101,35 +100,3 @@ else:
                 thumb.thumbnail((thumb_size, thumb_size))
             border_color = "#FF0000" if img_path in recent_images else "#CCCCCC"
             cols[c].image(thumb, width=thumb_size, caption=img_path.name, use_column_width=False)
-
-# ---------------- Database Explorer ----------------
-st.markdown("---")
-st.subheader("Database Explorer (Optional)")
-db_root = config.DB_DIR
-if db_root.exists():
-    show_db_explorer = st.checkbox("Show Database Explorer", value=False)
-    if show_db_explorer:
-        db_files = sorted([p for p in db_root.iterdir() if p.suffix == ".db"])
-        if db_files:
-            st.write(f"Found **{len(db_files)}** database files:")
-            for db_file in db_files:
-                file_stat = db_file.stat()
-                modified_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(file_stat.st_mtime))
-                size_kb = file_stat.st_size / 1024
-                st.markdown(f"- **{db_file.name}** — {size_kb:.1f} KB — last modified {modified_time}")
-                if st.button(f"Show Tables in {db_file.name}", key=db_file.name):
-                    try:
-                        conn = sqlite3.connect(db_file)
-                        cursor = conn.cursor()
-                        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-                        tables = cursor.fetchall()
-                        conn.close()
-                        if tables:
-                            table_list = [t[0] for t in tables]
-                            st.write(f"Tables: {', '.join(table_list)}")
-                        else:
-                            st.write("No tables found.")
-                    except Exception as e:
-                        st.error(f"Error reading {db_file.name}: {e}")
-else:
-    st.warning(f"Database folder not found: {db_root}")
