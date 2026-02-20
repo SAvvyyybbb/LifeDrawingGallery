@@ -27,7 +27,7 @@ st.set_page_config(
 )
 
 st.title("Check & Commit Changes")
-st.write("This page lets you inspect local changes, view database differences, and commit updates manually.")
+st.write("This page lets you inspect local tracked changes, view database differences, and commit updates manually.")
 
 st.markdown("---")
 
@@ -44,20 +44,28 @@ def run_git(args):
     )
     return result.returncode, result.stdout.strip(), result.stderr.strip()
 
+def get_tracked_changes():
+    """Return only tracked changes, ignoring untracked files/folders."""
+    code, out, err = run_git(["status", "--porcelain"])
+    if code != 0:
+        st.error(f"Git status error: {err}")
+        return []
+
+    # Filter out untracked files (lines starting with '??')
+    tracked_lines = [line for line in out.splitlines() if not line.startswith("??")]
+    return tracked_lines
+
 st.subheader("Git Repository Status & Commit")
 
 # --- Check Status Button ---
 if st.button("Check Repository Status"):
-    status_code, status_out, status_err = run_git(["status", "--porcelain"])
-    if status_code != 0:
-        st.error(f"Git status error: {status_err}")
+    tracked_changes = get_tracked_changes()
+    if not tracked_changes:
+        st.success("No local tracked changes detected.")
     else:
-        if not status_out:
-            st.success("No local changes detected.")
-        else:
-            st.warning(f"Detected {len(status_out.splitlines())} local changes:")
-            for line in status_out.splitlines():
-                st.write(f"- {line}")
+        st.warning(f"Detected {len(tracked_changes)} local tracked changes:")
+        for line in tracked_changes:
+            st.write(f"- {line}")
 
 # --- Commit Changes Button ---
 commit_msg = st.text_input("Commit message for changes:", value="Update from Streamlit dashboard")
@@ -82,26 +90,22 @@ st.markdown("---")
 # ---------------- Database Changes ----------------
 st.subheader("Database Changes")
 
-def row_hash(row: sqlite3.Row):
-    """Hash a DB row for simple change detection"""
-    return hashlib.md5(str(tuple(row)).encode("utf-8")).hexdigest()
-
 def get_db_changes():
-    """Compare current DB rows with a snapshot to detect added/modified/removed"""
+    """Detect rows added per table (counts actual rows)."""
     changes = {"added": [], "modified": [], "removed": []}
     db_files = sorted([p for p in config.DB_DIR.iterdir() if p.suffix == ".db"])
     for db_file in db_files:
         try:
             conn = sqlite3.connect(db_file)
-            conn.row_factory = sqlite3.Row
             c = conn.cursor()
             c.execute("SELECT name FROM sqlite_master WHERE type='table';")
             tables = [t[0] for t in c.fetchall()]
             for table in tables:
                 try:
-                    rows = c.execute(f"SELECT * FROM {table}").fetchall()
-                    for r in rows:
-                        changes["added"].append(f"{db_file.name}/{table}/{r['id']}" if 'id' in r.keys() else f"{db_file.name}/{table}")
+                    # Count actual rows
+                    row_count = c.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                    if row_count > 0:
+                        changes["added"].append(f"{db_file.name}/{table}: {row_count} rows")
                 except sqlite3.OperationalError:
                     continue
             conn.close()
@@ -116,7 +120,7 @@ else:
     st.warning("Database changes detected:")
     for change_type, items in db_changes.items():
         if items:
-            st.write(f"**{change_type.capitalize()} ({len(items)} rows)**")
+            st.write(f"**{change_type.capitalize()} ({len(items)} tables)**")
             for i in items:
                 st.write(f"- {i}")
 
