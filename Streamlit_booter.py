@@ -35,22 +35,43 @@ def run_git(args):
     )
     return result.returncode, result.stdout.strip(), result.stderr.strip()
 
+# ---------------- Git Pull Button & File Changes ----------------
 st.subheader("Repository Sync Status (Restricted)")
 
-# Run pull only once per session
-if "git_synced" not in st.session_state:
+def git_pull(show_files=True):
+    """Pull latest changes from GitHub and optionally display changed files"""
     code, out, err = run_git(["pull", "--rebase"])
-    st.session_state.git_synced = True  # mark as done
-
     if code == 0:
-        st.success("Repository inside Image Processing folder is up to date ✅")
+        st.success("Repository is up to date ✅")
         if out:
             st.info(f"Git output:\n{out}")
+
+        if show_files:
+            # Show changed files
+            code_files, out_files, err_files = run_git(["diff", "--name-status", "HEAD@{1}", "HEAD"])
+            if code_files == 0 and out_files.strip():
+                changed = out_files.strip().splitlines()
+                st.subheader("Files Changed in Last Pull")
+                for line in changed:
+                    status, file_path = line.split("\t", 1)
+                    status_emoji = {"A":"➕","M":"✏️","D":"➖"}.get(status, status)
+                    st.write(f"{status_emoji} {file_path}")
+            else:
+                st.info("No files changed in this pull.")
+
     else:
         st.error("Failed to pull updates ⚠️")
         if err:
             st.error(f"Git error:\n{err}")
         st.warning("Resolve conflicts manually before continuing.")
+
+# Button to manually trigger pull
+if st.button("Pull Latest Changes"):
+    git_pull()
+elif "git_synced" not in st.session_state:
+    # Optionally run a pull automatically first time per session
+    git_pull()
+    st.session_state.git_synced = True
 else:
     st.info("Repository sync already performed this session.")
 
@@ -75,7 +96,7 @@ st.info("Select a stage from the sidebar or top menu to begin your workflow.")
 # ---------------- Folder Preview ----------------
 st.subheader("Cleaned Images Preview")
 CLEANED_DIR = config.CLEANED_DIR
-CLEANED_DIR.mkdir(parents=True, exist_ok=True)  # <-- ensure folder exists
+CLEANED_DIR.mkdir(parents=True, exist_ok=True)  # ensure folder exists
 
 # Collect images
 cleaned_images = sorted([
@@ -111,6 +132,11 @@ else:
                     thumb = ImageOps.exif_transpose(im).convert("RGB")
                     thumb.thumbnail((thumb_size, thumb_size))
                 border_color = "#FF0000" if img_path in recent_images else "#CCCCCC"
-                cols[c].image(thumb, width=thumb_size, caption=img_path.name, use_column_width=False)
+                cols[c].image(
+                    thumb,
+                    width=thumb_size,
+                    caption=img_path.name,
+                    use_column_width=False
+                )
             except Exception as e:
                 st.warning(f"Failed to load thumbnail: {img_path.name} ({e})")

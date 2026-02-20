@@ -108,34 +108,35 @@ df_batches = load_batches()
 if df_batches.empty:
     st.info("No batches found in the database. Create some batches first to preview images.")
     conn.close()
-    st.stop()
-
-# ---------------- Batch Selection ----------------
-primary_options = sorted(df_batches['primary_folder'].dropna().unique())
-selected_primary = st.selectbox("Select Primary Folder", primary_options)
-df_primary = df_batches[df_batches['primary_folder'] == selected_primary]
-
-secondary_options = sorted(df_primary['aspect_ratio'].dropna().unique())
-if secondary_options:
-    selected_secondary = st.selectbox("Select Secondary Folder", secondary_options)
-    df_secondary = df_primary[df_primary['aspect_ratio'] == selected_secondary]
 else:
-    df_secondary = df_primary
+    # ---------------- Batch Selection ----------------
+    primary_options = sorted(df_batches['primary_folder'].dropna().unique())
+    if not primary_options:
+        st.info("No primary folders available in batches.")
+        conn.close()
+    else:
+        selected_primary = st.selectbox("Select Primary Folder", primary_options)
+        df_primary = df_batches[df_batches['primary_folder'] == selected_primary]
 
-batch_map = dict(zip(df_secondary['id'], df_secondary['batch_name']))
-selected_batch_id = st.selectbox(
-    "Select Batch Number",
-    options=df_secondary['id'],
-    format_func=lambda x: f"{x} - {batch_map[x]}"
-)
+        secondary_options = sorted(df_primary['aspect_ratio'].dropna().unique())
+        if secondary_options:
+            selected_secondary = st.selectbox("Select Secondary Folder", secondary_options)
+            df_secondary = df_primary[df_primary['aspect_ratio'] == selected_secondary]
+        else:
+            df_secondary = df_primary
 
-df_images = load_images(selected_batch_id)
-if df_images.empty:
-    st.warning("No images found for this batch.")
-    conn.close()
-    st.stop()
+        batch_map = dict(zip(df_secondary['id'], df_secondary['batch_name']))
+        selected_batch_id = st.selectbox(
+            "Select Batch Number",
+            options=df_secondary['id'],
+            format_func=lambda x: f"{x} - {batch_map[x]}"
+        )
 
-st.subheader("Batch Preview")
-render_batch_preview(df_images.sort_values("manual_order").reset_index(drop=True))
+        df_images = load_images(selected_batch_id)
+        if df_images.empty:
+            st.info("No images found for this batch yet. Upload or generate images first.")
+        else:
+            st.subheader("Batch Preview")
+            render_batch_preview(df_images.sort_values("manual_order").reset_index(drop=True))
 
-conn.close()
+        conn.close()
