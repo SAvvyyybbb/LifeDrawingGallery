@@ -4,8 +4,9 @@ import streamlit as st
 from pathlib import Path
 import subprocess
 import sqlite3
-import config
 import hashlib
+import os
+import config
 
 # ---------------- Add modules folder to path ----------------
 MODULES_DIR = Path(__file__).parent / "modules"
@@ -21,15 +22,34 @@ st.set_page_config(
 # ---------------- Git Helpers ----------------
 REPO_DIR = config.IMAGE_PROCESSING_DIR.resolve()
 
+# ---------------- Deploy Key Setup ----------------
+# Write the deploy key from Streamlit secrets to a temp file
+DEPLOY_KEY_PATH = REPO_DIR / "streamlit_deploy_key"
+DEPLOY_KEY_PATH.write_text(st.secrets["GITHUB_SSH_KEY"])
+os.chmod(DEPLOY_KEY_PATH, 0o600)  # secure permissions
+
+# Environment for all Git subprocess calls
+GIT_ENV = os.environ.copy()
+GIT_ENV["GIT_SSH_COMMAND"] = f"ssh -i {DEPLOY_KEY_PATH} -o IdentitiesOnly=yes"
+
+# Force the repo to use SSH remote
+subprocess.run(
+    ["git", "remote", "set-url", "origin", "git@github.com:SAvvyyybbb/LifeDrawingGallery.git"],
+    cwd=REPO_DIR,
+    env=GIT_ENV
+)
+
 def run_git(args):
-    """Run git commands restricted to IMAGE_PROCESSING_DIR"""
+    """Run Git in the repo using SSH deploy key"""
     result = subprocess.run(
         ["git"] + args,
         cwd=REPO_DIR,
         capture_output=True,
-        text=True
+        text=True,
+        env=GIT_ENV
     )
     return result.returncode, result.stdout.strip(), result.stderr.strip()
+
 
 def git_status():
     code, out, err = run_git(["status", "--porcelain"])
@@ -37,6 +57,7 @@ def git_status():
         return [], err
     lines = out.splitlines()
     return lines, None
+
 
 def git_commit(message="Commit via Streamlit"):
     """Stage all changes and commit with a local Git identity"""
@@ -51,27 +72,28 @@ def git_commit(message="Commit via Streamlit"):
     code, out, err = run_git(["commit", "-m", message])
 
     # Handle case where nothing to commit
-    if code != 0 and "nothing to commit" in err.lower():
+    if code != 0 and err and "nothing to commit" in err.lower():
         return 0, "No changes to commit.", None
 
     return code, out, err
 
+
 def git_push():
-    """Push commits to the remote repository using SSH with clean Streamlit messages"""
+    """Push commits to the remote repository using deploy key"""
     code, out, err = run_git(["push"])
     if code == 0:
         return True, "✅ Changes pushed to GitHub successfully."
     else:
         msg = err or out
         if "Permission denied" in msg:
-            msg += "\n⚠️ SSH authentication failed. Make sure your SSH key is added to GitHub and loaded."
+            msg += "\n⚠️ SSH authentication failed. Make sure your deploy key is valid."
         return False, msg
+
 
 # ---------------- DB Change Tracker ----------------
 SNAPSHOT_FILE = REPO_DIR / ".db_snapshot.txt"
 
 def row_hash(row):
-    """Compute a hash for a DB row (ignores internal ordering)"""
     return hashlib.md5(str(tuple(row)).encode("utf-8")).hexdigest()
 
 def get_db_changes():
@@ -134,6 +156,7 @@ def get_db_changes():
     conn.close()
     return changes
 
+
 # ---------------- Folder Tracker ----------------
 FOLDER_SNAPSHOT_FILE = REPO_DIR / ".folder_snapshot.txt"
 
@@ -161,7 +184,6 @@ def get_folder_changes():
             if old_files != new_files:
                 modified[k] = {"added": new_files - old_files, "removed": old_files - new_files}
 
-    # Update snapshot
     with open(FOLDER_SNAPSHOT_FILE, "w", encoding="utf-8") as f:
         for name, files in current_folders.items():
             files_rel = [str(p.relative_to(REPO_DIR)) for p in files]
@@ -169,10 +191,10 @@ def get_folder_changes():
 
     return added, removed, modified
 
+
 # ---------------- UI ----------------
 st.title("Repository Commit & Database Tracker")
 
-# ---------------- Git Status ----------------
 st.subheader("Check Repository Status")
 IGNORED_PATTERNS = [".streamlit/"]
 
