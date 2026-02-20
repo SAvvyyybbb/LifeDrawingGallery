@@ -21,14 +21,15 @@ st.title("LifeDrawingGallery — Image Crop & Rotate")
 # ---------------- Database ----------------
 DB_PATH = config.DB_DIR / "image_data.db"
 
-def update_modified_hash(original_filename, modified_hash):
-    """Update raw_image_data with new modified_hash for an edited image"""
+def update_modified_hash_only(original_filename, modified_hash):
+    """Update only the modified_hash for an edited image."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute(
-        "UPDATE raw_image_data SET modified_hash=?, processing=0 WHERE original_filename=?",
-        (modified_hash, original_filename)
-    )
+    cursor.execute("""
+        UPDATE raw_image_data
+        SET modified_hash=?, processing=0
+        WHERE original_filename=?
+    """, (modified_hash, original_filename))
     conn.commit()
     conn.close()
 
@@ -140,31 +141,29 @@ def classify_aspect(img):
     w,h = img.size
     ratio = w/h
     if ratio < 0.6:
-        category = "Extra Tall"
+        return "Extra Tall"
     elif 0.6 <= ratio < 0.9:
-        category = "Portrait"
+        return "Portrait"
     elif 0.9 <= ratio <= 1.1:
-        category = "Square"
+        return "Square"
     elif 1.1 < ratio <= 1.8:
-        category = "Landscape"
+        return "Landscape"
     else:
-        category = "Extra Wide"
-    return category
+        return "Extra Wide"
 
 # ---------------- Save Edited Image ----------------
 with col_save:
     if st.button("Save Edited Image"):
         try:
-            # Save to file
+            # Overwrite file
             cropped_img.save(current_image_path)
 
-            # Compute new hashes
+            # Compute modified hash
             data = current_image_path.read_bytes()
             mod_hash = hashlib.sha256(data).hexdigest()
-            mod_phash = str(imagehash.phash(cropped_img))
 
-            # Update raw_image_data
-            update_modified_hash(current_image_path.name, mod_hash)
+            # Update only modified_hash in DB
+            update_modified_hash_only(current_image_path.name, mod_hash)
 
             category = classify_aspect(cropped_img)
             st.success(f"Saved — Aspect Category: {category}")
@@ -177,18 +176,15 @@ with col_next:
     if st.button("Save & Next"):
         try:
             cropped_img.save(current_image_path)
-
-            # Update DB with modified hash
             data = current_image_path.read_bytes()
             mod_hash = hashlib.sha256(data).hexdigest()
-            update_modified_hash(current_image_path.name, mod_hash)
-
+            update_modified_hash_only(current_image_path.name, mod_hash)
         except Exception as e:
             st.error(f"Error saving image: {e}")
 
+        # Move to next image
         if st.session_state.selected < len(all_images)-1:
             st.session_state.selected += 1
-        # Update thumbnail page if needed
         if st.session_state.selected >= end_idx and st.session_state.thumb_page < total_pages-1:
             st.session_state.thumb_page += 1
         st.experimental_rerun()

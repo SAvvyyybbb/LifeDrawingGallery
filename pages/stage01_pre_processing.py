@@ -1,4 +1,4 @@
-# stage01_pre_processing.py
+# pages/stage01_pre_processing.py
 import streamlit as st
 from pathlib import Path
 from PIL import Image
@@ -29,23 +29,6 @@ def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    # Raw images table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS raw_image_data (
-            hash TEXT PRIMARY KEY,
-            modified_hash TEXT,
-            phash TEXT,
-            poster_id INTEGER,
-            poster_name TEXT,
-            message_id INTEGER,
-            channel_id INTEGER,
-            original_filename TEXT,
-            created_at TEXT,
-            processing INTEGER DEFAULT 0,
-            batched INTEGER DEFAULT 0
-        )
-    """)
-
     # Processed images table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS processed_image_data (
@@ -59,7 +42,6 @@ def init_db():
             created_at TEXT
         )
     """)
-
     conn.commit()
     return conn, cursor
 
@@ -76,8 +58,23 @@ def find_raw_record(cursor, img_path, img_hash):
     row = cursor.fetchone()
     return row[0] if row else None
 
+def is_duplicate(cursor, original_hash, phash):
+    """
+    Checks if a processed image already exists
+    using either original_hash or phash.
+    """
+    cursor.execute("""
+        SELECT 1 FROM processed_image_data
+        WHERE original_hash=? OR phash=?
+    """, (original_hash, phash))
+    return cursor.fetchone() is not None
+
 # ---------------- Streamlit UI ----------------
-st.title("Stage 1: Preprocess Raw Images (With Edited Images Support)")
+st.title("Stage 1: Preprocess Raw Images (With Edited Images Support & Duplicate Check)")
+
+if not RAW_DIR.exists() or not any(RAW_DIR.iterdir()):
+    st.warning(f"No raw images found in {RAW_DIR}. Stage 1 cannot run.")
+    st.stop()
 
 raw_files = [f for f in RAW_DIR.iterdir() if f.suffix.lower() in (".png", ".jpg", ".jpeg")]
 total_raw = len(raw_files)
@@ -89,6 +86,7 @@ else:
     if st.button("Run Stage 1: Process Raw Images"):
         conn, cursor = init_db()
         success_count = 0
+        skipped_duplicates = 0
         failed = []
 
         progress_bar = st.progress(0)
@@ -100,14 +98,14 @@ else:
                 img_hash = sha256_bytes(data)
                 img_phash = str(imagehash.phash(Image.open(path)))
 
+                # Link to raw_image_data via modified_hash first
+                linked_hash = find_raw_record(cursor, path, img_hash)
+                original_hash = linked_hash or img_hash
+
                 # ---------------- Skip if already processed ----------------
-                cursor.execute(
-                    "SELECT processing FROM raw_image_data WHERE hash=? OR modified_hash=?",
-                    (img_hash, img_hash)
-                )
-                row = cursor.fetchone()
-                if row and row[0] == 1:
-                    status_text.text(f"Skipping {path.name} (already processed)")
+                if is_duplicate(cursor, original_hash, img_phash):
+                    status_text.text(f"Skipping {path.name} (duplicate detected)")
+                    skipped_duplicates += 1
                     progress_bar.progress((i+1)/total_raw)
                     continue
 
@@ -165,24 +163,20 @@ else:
                 processed_hash = sha256_bytes(out_path.read_bytes())
                 processed_phash = str(imagehash.phash(resized))
 
-                # Link to raw_image_data via modified_hash first
-                linked_hash = find_raw_record(cursor, path, img_hash)
-
                 # Insert into processed_image_data
                 cursor.execute("""
                     INSERT INTO processed_image_data (
                         hash, phash, original_hash, original_filename,
                         category, width, height, created_at
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """, (processed_hash, processed_phash, linked_hash, path.name,
+                """, (processed_hash, processed_phash, original_hash, path.name,
                       category, target_w, target_h, datetime.now(timezone.utc).isoformat()))
 
                 # Update raw processing flag
-                if linked_hash:
-                    cursor.execute(
-                        "UPDATE raw_image_data SET processing=1 WHERE hash=?",
-                        (linked_hash,)
-                    )
+                cursor.execute(
+                    "UPDATE raw_image_data SET processing=1 WHERE hash=?",
+                    (original_hash,)
+                )
 
                 # Delete raw file
                 path.unlink()
@@ -202,6 +196,7 @@ else:
         st.success("Stage 1 processing complete!")
         st.write(f"Total images in Raw folder: {total_raw}")
         st.write(f"Successfully processed: {success_count}")
+        st.write(f"Skipped duplicates: {skipped_duplicates}")
         st.write(f"Failed images: {len(failed)}")
         if failed:
             st.warning("Failed images:")
