@@ -4,18 +4,17 @@ from pathlib import Path
 import sqlite3
 import config
 import pandas as pd
-import time
 
 # ---------------- Page Config ----------------
 st.set_page_config(
-    page_title="Database Viewer",
+    page_title="Database Viewer & Editor",
     layout="wide"
 )
 
-st.title("LifeDrawingGallery Database Viewer")
+st.title("LifeDrawingGallery Database Viewer & Editor")
 st.write("""
-Explore your SQLite databases for LifeDrawingGallery.
-Select a database, view its tables, and inspect rows.
+Explore, filter, and edit your SQLite databases.
+Select a database, browse tables, filter rows, edit values, and save changes.
 """)
 
 # ---------------- Select Database ----------------
@@ -55,7 +54,7 @@ if not tables:
 
 table_name = st.selectbox("Select Table", tables)
 
-# ---------------- Browse Rows ----------------
+# ---------------- Browse & Filter Rows ----------------
 st.markdown("---")
 st.subheader(f"Rows in Table: {table_name}")
 
@@ -65,9 +64,9 @@ try:
     st.write(f"Total Rows: {total_rows}")
 
     max_rows = st.number_input(
-        "Maximum rows to display",
+        "Maximum rows to display/edit",
         min_value=10,
-        max_value=10000,
+        max_value=1000,
         value=100,
         step=10
     )
@@ -78,23 +77,36 @@ try:
     if df.empty:
         st.info("No rows found.")
     else:
-        st.dataframe(df)
+        # ---------------- Filter Section ----------------
+        st.subheader("Filter Rows (Optional)")
+        filter_column = st.selectbox("Column to filter", df.columns.tolist())
+        filter_value = st.text_input("Filter value (contains)")
+        if filter_value:
+            df = df[df[filter_column].astype(str).str.contains(filter_value, case=False, na=False)]
+
+        st.write(f"Displaying {len(df)} rows after filtering.")
+
+        # ---------------- Editable Grid ----------------
+        st.subheader("Edit Table Values")
+        edited_df = st.data_editor(df, num_rows="dynamic")
+
+        # ---------------- Save Changes ----------------
+        if st.button("Save Changes to Database"):
+            try:
+                # Determine primary key: prefer 'id', else first column
+                pk_col = "id" if "id" in df.columns else df.columns[0]
+                for index, row in edited_df.iterrows():
+                    set_clause = ", ".join([f"{col} = ?" for col in df.columns])
+                    pk_value = row[pk_col]
+                    values = [row[col] for col in df.columns] + [pk_value]
+                    sql = f"UPDATE {table_name} SET {set_clause} WHERE {pk_col} = ?"
+                    cursor.execute(sql, values)
+                conn.commit()
+                st.success("Changes saved successfully ✅")
+            except Exception as e:
+                st.error(f"Failed to save changes: {e}")
 
 except Exception as e:
     st.error(f"Failed to read rows: {e}")
-
-# ---------------- Optional Filters ----------------
-st.markdown("---")
-st.subheader("Search / Filter Table (Optional)")
-
-try:
-    filter_column = st.selectbox("Select Column to Filter", df.columns.tolist())
-    filter_value = st.text_input("Filter Value (contains)")
-    if filter_value:
-        filtered_df = df[df[filter_column].astype(str).str.contains(filter_value, case=False, na=False)]
-        st.write(f"Filtered Rows: {len(filtered_df)}")
-        st.dataframe(filtered_df)
-except Exception:
-    pass
 
 conn.close()
