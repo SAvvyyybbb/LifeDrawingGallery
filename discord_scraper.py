@@ -53,6 +53,7 @@ def init_db():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS raw_image_data (
             hash TEXT PRIMARY KEY,
+            modified_hash TEXT,
             phash TEXT,
             poster_id INTEGER,
             poster_name TEXT,

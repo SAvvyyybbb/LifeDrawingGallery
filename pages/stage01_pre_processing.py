@@ -1,3 +1,5 @@
+# stage01_pre_processing.py
+
 import streamlit as st
 from pathlib import Path
 from PIL import Image
@@ -11,7 +13,7 @@ import config
 # ---------------- Config ----------------
 RAW_DIR = config.RAW_DIR
 PROCESSED_DIR = config.CLEANED_DIR
-TOLERANCE = config.TOLERANCE
+TOLERANCE = getattr(config, "TOLERANCE", 10)
 DB_PATH = config.DB_DIR / "image_data.db"
 
 # ---------------- Helpers ----------------
@@ -28,10 +30,11 @@ def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    # Raw images table
+    # Raw images table with modified_hash
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS raw_image_data (
             hash TEXT PRIMARY KEY,
+            modified_hash TEXT,
             phash TEXT,
             poster_id INTEGER,
             poster_name TEXT,
@@ -61,26 +64,43 @@ def init_db():
     conn.commit()
     return conn, cursor
 
-def find_raw_record(cursor, raw_hash, filename):
-    """Find raw record by hash or fallback to filename."""
+def find_raw_record(cursor, original_hash, filename):
+    """
+    Find raw record by first checking modified_hash, then fallback to hash.
+    Returns the canonical 'hash' from raw_image_data for deduplication.
+    """
+    # 1️⃣ Check if original_hash matches any modified_hash
     cursor.execute(
-        "SELECT hash FROM raw_image_data WHERE hash=? OR original_filename=?",
-        (raw_hash, filename)
+        "SELECT hash FROM raw_image_data WHERE modified_hash=?",
+        (original_hash,)
     )
     row = cursor.fetchone()
-    return row[0] if row else None
+    if row:
+        return row[0]  # Return canonical raw hash
+
+    # 2️⃣ Fallback to matching original hash or filename
+    cursor.execute(
+        "SELECT hash FROM raw_image_data WHERE hash=? OR original_filename=?",
+        (original_hash, filename)
+    )
+    row = cursor.fetchone()
+    if row:
+        return row[0]
+
+    # 3️⃣ Not found
+    return None
 
 # ---------------- Streamlit UI ----------------
-st.title("Stage 0: Preprocess Raw Images (Optional)")
+st.title("Stage 1: Preprocess Raw Images (Optional)")
 
 raw_files = [f for f in RAW_DIR.iterdir() if f.suffix.lower() in (".png", ".jpg", ".jpeg")]
 total_raw = len(raw_files)
 st.write(f"Found {total_raw} image(s) in Raw folder.")
 
 if total_raw == 0:
-    st.info("No images found in Raw folder. Stage 0 skipped.")
+    st.info("No images found in Raw folder. Stage 1 skipped.")
 else:
-    if st.button("Run Stage 0: Process Raw Images"):
+    if st.button("Run Stage 1: Process Raw Images"):
         conn, cursor = init_db()
         success_count = 0
         failed = []
@@ -141,7 +161,7 @@ else:
                 elif 1.1 < ratio <= 1.8: category = "Landscape"
                 else: category = "Extra Wide"
 
-                # Resize
+                # Resize for processing
                 sizes = {
                     "Square": (512,512),
                     "Portrait": (512,717),
@@ -162,7 +182,7 @@ else:
                 processed_hash = sha256_bytes(out_path.read_bytes())
                 processed_phash = str(imagehash.phash(resized))
 
-                # Link to raw_image_data
+                # Link to canonical raw_image_data
                 linked_hash = find_raw_record(cursor, raw_hash, path.name)
 
                 # Insert into processed_image_data
@@ -199,7 +219,7 @@ else:
             conn.commit()
 
         # ---------------- Summary ----------------
-        st.success("Stage 0 processing complete!")
+        st.success("Stage 1 processing complete!")
         st.write(f"Total images in Raw folder: {total_raw}")
         st.write(f"Successfully processed: {success_count}")
         st.write(f"Failed images: {len(failed)}")

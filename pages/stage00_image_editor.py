@@ -5,6 +5,10 @@ from PIL import Image
 from streamlit_cropper import st_cropper
 import config
 import math
+import sqlite3
+import hashlib
+import imagehash
+from datetime import datetime, timezone
 
 # ---------------- Page Config ----------------
 st.set_page_config(
@@ -14,6 +18,20 @@ st.set_page_config(
 
 st.title("LifeDrawingGallery — Image Crop & Rotate")
 
+# ---------------- Database ----------------
+DB_PATH = config.DB_DIR / "image_data.db"
+
+def update_modified_hash(original_filename, modified_hash):
+    """Update raw_image_data with new modified_hash for an edited image"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE raw_image_data SET modified_hash=?, processing=0 WHERE original_filename=?",
+        (modified_hash, original_filename)
+    )
+    conn.commit()
+    conn.close()
+
 # ---------------- Choose Folder ----------------
 IMAGE_FOLDERS = {
     "Raw Images": config.RAW_DIR,
@@ -21,10 +39,7 @@ IMAGE_FOLDERS = {
     "Processed Images": config.IMAGE_PROCESSING_DIR
 }
 
-folder_choice = st.selectbox(
-    "Select Image Folder",
-    list(IMAGE_FOLDERS.keys())
-)
+folder_choice = st.selectbox("Select Image Folder", list(IMAGE_FOLDERS.keys()))
 IMAGE_DIR = IMAGE_FOLDERS[folder_choice]
 
 if not IMAGE_DIR.exists():
@@ -48,11 +63,6 @@ if "last_folder" not in st.session_state or st.session_state.last_folder != fold
 THUMBS_PER_PAGE = 24
 NUM_COLS = 8
 total_pages = math.ceil(len(all_images) / THUMBS_PER_PAGE)
-
-if "thumb_page" not in st.session_state:
-    st.session_state.thumb_page = 0
-if "selected" not in st.session_state:
-    st.session_state.selected = 0
 
 col1, col2, col3 = st.columns([1,2,1])
 with col1:
@@ -118,7 +128,7 @@ cropped_img = st_cropper(
     rotated,
     realtime_update=True,
     aspect_ratio=crop_ratio,
-    box_color="#FF0000",
+    box_color="#FF0000"
 )
 
 st.image(cropped_img, caption="Preview of Crop", use_column_width=True)
@@ -141,22 +151,41 @@ def classify_aspect(img):
         category = "Extra Wide"
     return category
 
+# ---------------- Save Edited Image ----------------
 with col_save:
     if st.button("Save Edited Image"):
         try:
+            # Save to file
             cropped_img.save(current_image_path)
+
+            # Compute new hashes
+            data = current_image_path.read_bytes()
+            mod_hash = hashlib.sha256(data).hexdigest()
+            mod_phash = str(imagehash.phash(cropped_img))
+
+            # Update raw_image_data
+            update_modified_hash(current_image_path.name, mod_hash)
+
             category = classify_aspect(cropped_img)
             st.success(f"Saved — Aspect Category: {category}")
             st.balloons()
         except Exception as e:
             st.error(f"Error saving image: {e}")
 
+# ---------------- Save & Next ----------------
 with col_next:
     if st.button("Save & Next"):
         try:
             cropped_img.save(current_image_path)
+
+            # Update DB with modified hash
+            data = current_image_path.read_bytes()
+            mod_hash = hashlib.sha256(data).hexdigest()
+            update_modified_hash(current_image_path.name, mod_hash)
+
         except Exception as e:
             st.error(f"Error saving image: {e}")
+
         if st.session_state.selected < len(all_images)-1:
             st.session_state.selected += 1
         # Update thumbnail page if needed
@@ -164,6 +193,7 @@ with col_next:
             st.session_state.thumb_page += 1
         st.experimental_rerun()
 
+# ---------------- Reset Edits ----------------
 with col_reset:
     if st.button("Reset Edits"):
         st.experimental_rerun()
