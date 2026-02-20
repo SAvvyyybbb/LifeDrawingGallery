@@ -51,11 +51,6 @@ def git_commit(message="Commit via Streamlit"):
     code, out, err = run_git(["commit", "-m", message])
     return code, out, err
 
-def git_push():
-    """Push commits to the remote repository"""
-    code, out, err = run_git(["push"])
-    return code, out, err
-
 # ---------------- DB Change Tracker ----------------
 SNAPSHOT_FILE = REPO_DIR / ".db_snapshot.txt"
 
@@ -73,14 +68,12 @@ def get_db_changes():
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
 
-    # Get all tables
     try:
         c.execute("SELECT name FROM sqlite_master WHERE type='table';")
         tables = [t[0] for t in c.fetchall()]
     except Exception:
         tables = []
 
-    # Load previous snapshot
     previous_snapshot = {}
     if SNAPSHOT_FILE.exists():
         with open(SNAPSHOT_FILE, "r", encoding="utf-8") as f:
@@ -126,39 +119,53 @@ def get_db_changes():
     return changes
 
 # ---------------- Folder Tracker ----------------
-FOLDER_SNAPSHOT_FILE = REPO_DIR / ".folder_snapshot.txt"
-
 def get_folder_changes():
+    IMAGE_DIR = config.IMAGE_PROCESSING_DIR
+    snapshot_file = IMAGE_DIR / ".folder_snapshot.txt"
+
     current_folders = {}
-    for folder in REPO_DIR.iterdir():
+    for folder in IMAGE_DIR.rglob("*"):
         if folder.is_dir():
             imgs = [p for p in folder.rglob("*") if p.suffix.lower() in (".png", ".jpg", ".jpeg")]
-            current_folders[folder.name] = imgs
+            current_folders[str(folder.relative_to(IMAGE_DIR))] = len(imgs)
 
     previous_folders = {}
-    if FOLDER_SNAPSHOT_FILE.exists():
-        with open(FOLDER_SNAPSHOT_FILE, "r", encoding="utf-8") as f:
+    if snapshot_file.exists():
+        with open(snapshot_file, "r", encoding="utf-8") as f:
             for line in f:
-                name, files = line.strip().split("|")
-                previous_folders[name] = files.split(",")
+                name, count = line.strip().split("|")
+                previous_folders[name] = int(count)
 
     added = {k: v for k, v in current_folders.items() if k not in previous_folders}
     removed = {k: v for k, v in previous_folders.items() if k not in current_folders}
-    modified = {}
-    for k in current_folders:
-        if k in previous_folders:
-            old_files = set(previous_folders[k])
-            new_files = set(str(p.relative_to(REPO_DIR)) for p in current_folders[k])
-            if old_files != new_files:
-                modified[k] = {"added": new_files - old_files, "removed": old_files - new_files}
+    modified = {k: (previous_folders[k], current_folders[k])
+                for k in current_folders if k in previous_folders and previous_folders[k] != current_folders[k]}
 
-    # Update snapshot
-    with open(FOLDER_SNAPSHOT_FILE, "w", encoding="utf-8") as f:
-        for name, files in current_folders.items():
-            files_rel = [str(p.relative_to(REPO_DIR)) for p in files]
-            f.write(f"{name}|{','.join(files_rel)}\n")
+    with open(snapshot_file, "w", encoding="utf-8") as f:
+        for name, count in current_folders.items():
+            f.write(f"{name}|{count}\n")
 
     return added, removed, modified
+
+# ---------------- Summary Badge ----------------
+def render_summary_badge(db_changes, folder_changes):
+    added_db = sum(len(v) for v in db_changes["added"].values())
+    modified_db = sum(len(v) for v in db_changes["modified"].values())
+    removed_db = sum(len(v) for v in db_changes["removed"].values())
+
+    added_folders, removed_folders, modified_folders = folder_changes
+    added_imgs = sum(v for v in added_folders.values())
+    removed_imgs = sum(v for v in removed_folders.values())
+    modified_imgs = sum(v[1]-v[0] for v in modified_folders.values())
+
+    badge_md = f"""
+**Pending Changes Summary**
+
+| DB Added | DB Modified | DB Removed | Images Added | Images Removed | Images Modified |
+|----------|-------------|------------|--------------|----------------|----------------|
+| {added_db} | {modified_db} | {removed_db} | {added_imgs} | {removed_imgs} | {modified_imgs} |
+"""
+    st.markdown(badge_md)
 
 # ---------------- UI ----------------
 st.title("Repository Commit & Database Tracker")
@@ -171,7 +178,7 @@ def filter_git_status(lines):
     filtered = []
     for line in lines:
         path = line[3:] if len(line) > 3 else line
-        if any(path.startswith(p) for p in IGNORED_PATTERNS) or "__pycache__" in path:
+        if any(path.startswith(pat) for pat in IGNORED_PATTERNS) or "__pycache__" in path:
             continue
         filtered.append(line)
     return filtered
@@ -193,61 +200,46 @@ if st.button("Check Repository Status"):
 st.markdown("---")
 st.subheader("Database Changes")
 db_changes = get_db_changes()
-if not any(db_changes.values()):
-    st.success("No database changes detected.")
-else:
+
+# ---------------- Folder Tracker ----------------
+st.subheader("Image Processing Folder Tracker")
+added, removed, modified = get_folder_changes()
+
+# ---------------- Render Summary Badge ----------------
+render_summary_badge(db_changes, (added, removed, modified))
+
+# ---------------- Detailed Expanders ----------------
+# DB Changes
+if any(db_changes.values()):
     for change_type, tables in db_changes.items():
         with st.expander(f"{change_type.capitalize()} ({sum(len(v) for v in tables.values())} rows)"):
             for table, rows in tables.items():
                 st.write(f"**Table {table}:** {len(rows)} rows")
                 st.text(", ".join(str(rid) for rid in rows))
 
-# ---------------- Folder Changes ----------------
-st.markdown("---")
-st.subheader("Image Processing Folder Changes")
-added, removed, modified = get_folder_changes()
+# Folder Changes
+if added:
+    with st.expander(f"New Folders ({len(added)})"):
+        for f, c in added.items():
+            st.write(f"{f}: {c} images")
+if removed:
+    with st.expander(f"Removed Folders ({len(removed)})"):
+        for f, c in removed.items():
+            st.write(f"{f}: {c} images")
+if modified:
+    with st.expander(f"Modified Folders ({len(modified)})"):
+        for f, counts in modified.items():
+            st.write(f"{f}: {counts[0]} → {counts[1]} images")
 
-if not added and not removed and not modified:
-    st.success("No folder/image changes detected.")
-else:
-    if added:
-        with st.expander(f"New Folders ({len(added)})"):
-            for f, files in added.items():
-                st.write(f"**{f}** ({len(files)} images)")
-                for file in files:
-                    st.text(file)
-    if removed:
-        with st.expander(f"Removed Folders ({len(removed)})"):
-            for f, files in removed.items():
-                st.write(f"**{f}** ({len(files)} images)")
-                for file in files:
-                    st.text(file)
-    if modified:
-        with st.expander(f"Modified Folders ({len(modified)})"):
-            for f, changes_dict in modified.items():
-                st.write(f"**{f}**")
-                if changes_dict.get("added"):
-                    st.markdown(f"➕ Added ({len(changes_dict['added'])}):")
-                    for file in changes_dict['added']:
-                        st.text(file)
-                if changes_dict.get("removed"):
-                    st.markdown(f"➖ Removed ({len(changes_dict['removed'])}):")
-                    for file in changes_dict['removed']:
-                        st.text(file)
-
-# ---------------- Commit & Push Changes ----------------
+# ---------------- Commit Changes ----------------
 st.markdown("---")
-st.subheader("Commit & Push Changes")
+st.subheader("Commit Changes to Repository")
 commit_msg = st.text_input("Commit message", value="Commit via Streamlit")
-if st.button("Commit & Push Changes"):
+if st.button("Commit Changes"):
     code, out, err = git_commit(commit_msg)
     if code == 0:
-        st.success("Changes committed locally ✅")
-        st.info(out)
-        push_code, push_out, push_err = git_push()
-        if push_code == 0:
-            st.success("Changes pushed to GitHub ✅")
-        else:
-            st.error(f"Push failed: {push_err}")
+        st.success("Changes committed successfully ✅")
+        if out:
+            st.info(out)
     else:
         st.error(f"Commit failed: {err}")
