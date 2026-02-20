@@ -42,18 +42,25 @@ def git_commit(message="Commit via Streamlit"):
     """Stage all changes and commit with a local Git identity"""
     # Stage all changes
     run_git(["add", "."])
-    # Set local user identity
+
+    # Set local user identity (repo-specific)
     run_git(["config", "user.name", "Streamlit Bot"])
     run_git(["config", "user.email", "bot@example.com"])
+
     # Commit changes
     code, out, err = run_git(["commit", "-m", message])
+    return code, out, err
+
+def git_push():
+    """Push commits to the remote repository"""
+    code, out, err = run_git(["push"])
     return code, out, err
 
 # ---------------- DB Change Tracker ----------------
 SNAPSHOT_FILE = REPO_DIR / ".db_snapshot.txt"
 
 def row_hash(row):
-    """Compute a hash for a DB row"""
+    """Compute a hash for a DB row (ignores internal ordering)"""
     return hashlib.md5(str(tuple(row)).encode("utf-8")).hexdigest()
 
 def get_db_changes():
@@ -66,12 +73,14 @@ def get_db_changes():
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
 
+    # Get all tables
     try:
         c.execute("SELECT name FROM sqlite_master WHERE type='table';")
         tables = [t[0] for t in c.fetchall()]
     except Exception:
         tables = []
 
+    # Load previous snapshot
     previous_snapshot = {}
     if SNAPSHOT_FILE.exists():
         with open(SNAPSHOT_FILE, "r", encoding="utf-8") as f:
@@ -119,65 +128,42 @@ def get_db_changes():
 # ---------------- Folder Tracker ----------------
 FOLDER_SNAPSHOT_FILE = REPO_DIR / ".folder_snapshot.txt"
 
-def get_folder_tree(base_dir: Path):
-    """Build a nested dict of folders -> images"""
-    tree = {}
-    for path in base_dir.rglob("*"):
-        if path.is_file() and path.suffix.lower() in (".png", ".jpg", ".jpeg"):
-            parts = path.relative_to(base_dir).parts
-            current = tree
-            for part in parts[:-1]:  # folder parts
-                current = current.setdefault(part, {"_count":0, "_sub":{}})["_sub"]
-            # Increment count in leaf folder
-            folder = tree
-            for part in parts[:-1]:
-                folder = folder[part]["_sub"]
-            folder.setdefault("_count", 0)
-            folder["_count"] += 1
-    return tree
-
-def display_folder_tree(tree: dict):
-    """Display folder tree in Streamlit recursively"""
-    for name, data in tree.items():
-        if name.startswith("_"):  # skip internal keys
-            continue
-        folder_count = data.get("_count", 0)
-        subfolders = data.get("_sub", {})
-        label = f"{name} — {folder_count} image(s)" if folder_count else name
-        with st.expander(label, expanded=False):
-            display_folder_tree(subfolders)
-
 def get_folder_changes():
-    """Compare folder snapshot and return added/removed/modified images"""
     current_folders = {}
-    for folder in REPO_DIR.rglob("*"):
+    for folder in REPO_DIR.iterdir():
         if folder.is_dir():
             imgs = [p for p in folder.rglob("*") if p.suffix.lower() in (".png", ".jpg", ".jpeg")]
-            current_folders[str(folder.relative_to(REPO_DIR))] = len(imgs)
+            current_folders[folder.name] = imgs
 
     previous_folders = {}
     if FOLDER_SNAPSHOT_FILE.exists():
         with open(FOLDER_SNAPSHOT_FILE, "r", encoding="utf-8") as f:
             for line in f:
-                name, count = line.strip().split("|")
-                previous_folders[name] = int(count)
+                name, files = line.strip().split("|")
+                previous_folders[name] = files.split(",")
 
-    added = {k:v for k,v in current_folders.items() if k not in previous_folders}
-    removed = {k:v for k,v in previous_folders.items() if k not in current_folders}
-    modified = {k:(previous_folders[k], current_folders[k])
-                for k in current_folders if k in previous_folders and previous_folders[k]!=current_folders[k]}
+    added = {k: v for k, v in current_folders.items() if k not in previous_folders}
+    removed = {k: v for k, v in previous_folders.items() if k not in current_folders}
+    modified = {}
+    for k in current_folders:
+        if k in previous_folders:
+            old_files = set(previous_folders[k])
+            new_files = set(str(p.relative_to(REPO_DIR)) for p in current_folders[k])
+            if old_files != new_files:
+                modified[k] = {"added": new_files - old_files, "removed": old_files - new_files}
 
-    # Write snapshot
+    # Update snapshot
     with open(FOLDER_SNAPSHOT_FILE, "w", encoding="utf-8") as f:
-        for name, count in current_folders.items():
-            f.write(f"{name}|{count}\n")
+        for name, files in current_folders.items():
+            files_rel = [str(p.relative_to(REPO_DIR)) for p in files]
+            f.write(f"{name}|{','.join(files_rel)}\n")
 
     return added, removed, modified
 
 # ---------------- UI ----------------
 st.title("Repository Commit & Database Tracker")
 
-# Git Status
+# ---------------- Git Status ----------------
 st.subheader("Check Repository Status")
 IGNORED_PATTERNS = [".streamlit/"]
 
@@ -185,7 +171,7 @@ def filter_git_status(lines):
     filtered = []
     for line in lines:
         path = line[3:] if len(line) > 3 else line
-        if path.startswith(".streamlit/") or "__pycache__" in path:
+        if any(path.startswith(p) for p in IGNORED_PATTERNS) or "__pycache__" in path:
             continue
         filtered.append(line)
     return filtered
@@ -203,7 +189,7 @@ if st.button("Check Repository Status"):
             for l in lines:
                 st.text(l)
 
-# Database Changes
+# ---------------- Database Changes ----------------
 st.markdown("---")
 st.subheader("Database Changes")
 db_changes = get_db_changes()
@@ -216,45 +202,52 @@ else:
                 st.write(f"**Table {table}:** {len(rows)} rows")
                 st.text(", ".join(str(rid) for rid in rows))
 
-# Folder Tracker
+# ---------------- Folder Changes ----------------
 st.markdown("---")
-st.subheader("Image Processing Folder Tracker")
+st.subheader("Image Processing Folder Changes")
 added, removed, modified = get_folder_changes()
 
 if not added and not removed and not modified:
-    st.success("No folder or image count changes detected.")
+    st.success("No folder/image changes detected.")
 else:
     if added:
         with st.expander(f"New Folders ({len(added)})"):
-            for f, c in added.items():
-                st.write(f"{f}: {c} images")
+            for f, files in added.items():
+                st.write(f"**{f}** ({len(files)} images)")
+                for file in files:
+                    st.text(file)
     if removed:
         with st.expander(f"Removed Folders ({len(removed)})"):
-            for f, c in removed.items():
-                st.write(f"{f}: {c} images")
+            for f, files in removed.items():
+                st.write(f"**{f}** ({len(files)} images)")
+                for file in files:
+                    st.text(file)
     if modified:
         with st.expander(f"Modified Folders ({len(modified)})"):
-            for f, counts in modified.items():
-                st.write(f"{f}: {counts[0]} → {counts[1]} images")
+            for f, changes_dict in modified.items():
+                st.write(f"**{f}**")
+                if changes_dict.get("added"):
+                    st.markdown(f"➕ Added ({len(changes_dict['added'])}):")
+                    for file in changes_dict['added']:
+                        st.text(file)
+                if changes_dict.get("removed"):
+                    st.markdown(f"➖ Removed ({len(changes_dict['removed'])}):")
+                    for file in changes_dict['removed']:
+                        st.text(file)
 
-# Collapsible tree view for all current folders
+# ---------------- Commit & Push Changes ----------------
 st.markdown("---")
-st.subheader("Folder Tree View")
-folder_tree = get_folder_tree(REPO_DIR)
-if not folder_tree:
-    st.info("No images found in Image Processing folder.")
-else:
-    display_folder_tree(folder_tree)
-
-# Commit Changes
-st.markdown("---")
-st.subheader("Commit Changes to Repository")
+st.subheader("Commit & Push Changes")
 commit_msg = st.text_input("Commit message", value="Commit via Streamlit")
-if st.button("Commit Changes"):
+if st.button("Commit & Push Changes"):
     code, out, err = git_commit(commit_msg)
     if code == 0:
-        st.success("Changes committed successfully ✅")
-        if out:
-            st.info(out)
+        st.success("Changes committed locally ✅")
+        st.info(out)
+        push_code, push_out, push_err = git_push()
+        if push_code == 0:
+            st.success("Changes pushed to GitHub ✅")
+        else:
+            st.error(f"Push failed: {push_err}")
     else:
         st.error(f"Commit failed: {err}")
