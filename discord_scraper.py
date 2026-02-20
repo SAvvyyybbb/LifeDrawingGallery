@@ -1,3 +1,4 @@
+# discord_scraper_test.py
 import discord
 import aiohttp
 import os
@@ -14,6 +15,7 @@ import config
 
 # ---------------- Configuration ----------------
 TESTING_MODE = getattr(config, "TESTING_MODE", True)
+TEST_MODE_NO_REACT = getattr(config, "TEST_MODE_NO_REACT", 1)  # 1 = no reactions, 0 = normal
 TOKEN = getattr(config, "TOKEN", "")
 CHANNEL_ID = getattr(config, "CHANNEL_ID", 0)
 
@@ -27,12 +29,10 @@ ACCEPT_EMOJI = getattr(config, "ACCEPT_EMOJI", "✅")
 DUPLICATE_EMOJI = getattr(config, "DUPLICATE_EMOJI", "⚠️")
 INVALID_EMOJI = getattr(config, "INVALID_EMOJI", "❌")
 
-SEARCH_AFTER = getattr(config, "SEARCH_AFTER", None)
-SEARCH_BEFORE = getattr(config, "SEARCH_BEFORE", None)
-if SEARCH_AFTER and SEARCH_AFTER.tzinfo is None:
-    SEARCH_AFTER = SEARCH_AFTER.replace(tzinfo=timezone.utc)
-if SEARCH_BEFORE and SEARCH_BEFORE.tzinfo is None:
-    SEARCH_BEFORE = SEARCH_BEFORE.replace(tzinfo=timezone.utc)
+# ---------------- Search Range ----------------
+# Only download messages from Feb 1, 2026 onward
+SEARCH_AFTER = datetime(2026, 2, 1, tzinfo=timezone.utc)
+SEARCH_BEFORE = None  # Up to now
 
 # ---------------- Helpers ----------------
 def sha256_bytes(data: bytes) -> str:
@@ -129,10 +129,8 @@ class PhashCache:
         self.cache.append((img_hash, img_phash))
 
 def get_search_range(last_message_id):
-    default_after = datetime(1970, 1, 1, tzinfo=timezone.utc)
-    default_before = datetime.now(timezone.utc)
-    after = SEARCH_AFTER or default_after
-    before = SEARCH_BEFORE or default_before
+    after = SEARCH_AFTER or datetime(1970,1,1, tzinfo=timezone.utc)
+    before = SEARCH_BEFORE or datetime.now(timezone.utc)
     after_object = discord.Object(id=last_message_id) if last_message_id else None
     return after_object or after, before
 
@@ -158,7 +156,7 @@ async def main_logic():
         total_messages = total_images = total_duplicates = total_invalid = 0
         batch_commit_count = 0
 
-        # ---------------- FIX: get channel ----------------
+        # ---------------- Get channel ----------------
         channel = client.get_channel(CHANNEL_ID)
         if not channel:
             print(f"[ERROR] Channel ID {CHANNEL_ID} not found or bot lacks access.")
@@ -219,27 +217,27 @@ async def main_logic():
                     ext = normalize_extension(os.path.splitext(att.filename)[1] or ".img")
                     filename = f"{img_hash}{ext}"
 
-                    if not TESTING_MODE:
-                        (RAW_DIR / filename).write_bytes(data)
-                        cursor.execute("""
-                            INSERT OR IGNORE INTO raw_image_data (
-                                hash, phash, poster_id, poster_name,
-                                message_id, channel_id, original_filename, created_at, processing, batched
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0)
-                        """, (
-                            img_hash, str(img_phash),
-                            msg.author.id, str(msg.author),
-                            msg.id, msg.channel.id, att.filename,
-                            datetime.now(timezone.utc).isoformat()
-                        ))
+                    # Always write to RAW_DIR for this dry run
+                    (RAW_DIR / filename).write_bytes(data)
+                    cursor.execute("""
+                        INSERT OR IGNORE INTO raw_image_data (
+                            hash, phash, poster_id, poster_name,
+                            message_id, channel_id, original_filename, created_at, processing, batched
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0)
+                    """, (
+                        img_hash, str(img_phash),
+                        msg.author.id, str(msg.author),
+                        msg.id, msg.channel.id, att.filename,
+                        datetime.now(timezone.utc).isoformat()
+                    ))
 
                     phash_cache.add(img_phash, img_hash)
                     message_saved = True
                     total_images += 1
                     batch_commit_count += 1
 
-                # reactions
-                if not TESTING_MODE:
+                # reactions (skip in dry run if TEST_MODE_NO_REACT=1)
+                if not TESTING_MODE and not TEST_MODE_NO_REACT:
                     try:
                         if message_saved:
                             await msg.add_reaction(ACCEPT_EMOJI)
