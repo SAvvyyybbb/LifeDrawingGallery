@@ -1,8 +1,10 @@
 # pages/image_editor.py
 import streamlit as st
 from pathlib import Path
-from PIL import Image, ImageOps
+from PIL import Image
+from streamlit_cropper import st_cropper
 import config
+import math
 
 # ---------------- Page Config ----------------
 st.set_page_config(
@@ -23,8 +25,8 @@ folder_choice = st.selectbox(
     "Select Image Folder",
     list(IMAGE_FOLDERS.keys())
 )
-
 IMAGE_DIR = IMAGE_FOLDERS[folder_choice]
+
 if not IMAGE_DIR.exists():
     st.error(f"Folder not found: {IMAGE_DIR}")
     st.stop()
@@ -32,88 +34,123 @@ if not IMAGE_DIR.exists():
 all_images = sorted(
     [p for p in IMAGE_DIR.iterdir() if p.suffix.lower() in (".png", ".jpg", ".jpeg")]
 )
-
 if not all_images:
     st.info("No images found in this folder.")
     st.stop()
 
-# ---------------- Session State ----------------
-if "idx" not in st.session_state:
-    st.session_state.idx = 0
+# ---------------- Thumbnail Pagination ----------------
+THUMBS_PER_PAGE = 24
+NUM_COLS = 8
+total_pages = math.ceil(len(all_images) / THUMBS_PER_PAGE)
 
-# ---------------- Thumbnail Scroller ----------------
-st.subheader("Preview & Jump to Image")
+if "thumb_page" not in st.session_state:
+    st.session_state.thumb_page = 0
 
-thumb_cols = st.columns(8)
-THUMB_SIZE = 80
+col1, col2, col3 = st.columns([1,2,1])
+with col1:
+    if st.button("Previous Page") and st.session_state.thumb_page > 0:
+        st.session_state.thumb_page -= 1
+with col3:
+    if st.button("Next Page") and st.session_state.thumb_page < total_pages-1:
+        st.session_state.thumb_page += 1
 
-for i, img_path in enumerate(all_images[:80]):  # show first 80 thumbnails to avoid heavy load
-    with thumb_cols[i % 8]:
+st.write(f"Thumbnail Page {st.session_state.thumb_page+1} / {total_pages}")
+
+start_idx = st.session_state.thumb_page * THUMBS_PER_PAGE
+end_idx = min(start_idx + THUMBS_PER_PAGE, len(all_images))
+thumb_images = all_images[start_idx:end_idx]
+
+# Display thumbnails
+cols = st.columns(NUM_COLS)
+for i, img_path in enumerate(thumb_images):
+    with cols[i % NUM_COLS]:
         thumb = Image.open(img_path)
-        thumb.thumbnail((THUMB_SIZE, THUMB_SIZE))
-        if st.button(img_path.name, key=f"thumb_{i}"):
-            st.session_state.idx = i
+        thumb.thumbnail((80, 80))
+        if st.button("", key=f"thumb_{start_idx+i}", help=img_path.name):
+            st.session_state.selected = start_idx + i
+        st.image(thumb, width=80)
 
-st.write(f"Showing thumbnail navigation for {min(len(all_images), 80)} of {len(all_images)} images.")
+if "selected" not in st.session_state:
+    st.session_state.selected = 0
 
-# ---------------- Main Navigation ----------------
-idx = st.session_state.idx
-left, mid, right = st.columns([1, 2, 1])
+current_image_path = all_images[st.session_state.selected]
+st.write(f"**Editing [{st.session_state.selected+1}/{len(all_images)}]: {current_image_path.name}**")
 
-with left:
-    if st.button("⬅ Previous"):
-        st.session_state.idx = max(idx - 1, 0)
+image = Image.open(current_image_path)
 
-with right:
-    if st.button("Next ➡"):
-        st.session_state.idx = min(idx + 1, len(all_images) - 1)
-
-current_path = all_images[st.session_state.idx]
-st.write(f"**Editing [{st.session_state.idx+1}/{len(all_images)}]: {current_path.name}**")
-
-# Load image once
-image = Image.open(current_path)
-
-# ---------------- Editing Controls ----------------
+# ---------------- Rotate ----------------
 st.markdown("---")
-st.subheader("Crop & Rotate Controls")
+st.subheader("Rotate & Crop")
 
-# Rotation
-rotation = st.radio("Rotate:", ["0°", "90°", "180°", "270°"])
-angle_map = {"0°": 0, "90°": 90, "180°": 180, "270°": 270}
-angle = angle_map[rotation]
+rotate_option = st.radio("Rotate:", ["0°","90°","180°","270°"])
+angle_map = {"0°":0,"90°":90,"180°":180,"270°":270}
+angle = angle_map[rotate_option]
 
-# Cropping
-crop_enable = st.checkbox("Enable Crop")
-if crop_enable:
-    st.write("Select crop box values:")
-    width, height = image.size
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        x1 = st.number_input("x1", min_value=0, max_value=width, value=0)
-        y1 = st.number_input("y1", min_value=0, max_value=height, value=0)
-    with col2:
-        x2 = st.number_input("x2", min_value=0, max_value=width, value=width)
-        y2 = st.number_input("y2", min_value=0, max_value=height, value=height)
+rotated = image.rotate(angle, expand=True)
 
-# Apply transforms
-edited = image.rotate(angle, expand=True)
+# ---------------- Crop with Aspect Ratio ----------------
+ratio_choice = st.selectbox(
+    "Constrain Crop Aspect Ratio",
+    ["None","Square","Portrait","Landscape","Extra Tall","Extra Wide"]
+)
 
-if crop_enable:
-    edited = edited.crop((x1, y1, x2, y2))
+aspect_map = {
+    "None": None,
+    "Square": 1/1,
+    "Portrait": 0.6,     # ratio w/h ~0.6–0.9
+    "Landscape": 1.5,    # ratio w/h ~1.1–1.8
+    "Extra Tall": 0.5,   # ratio w/h <0.6
+    "Extra Wide": 2.0    # ratio w/h >1.8
+}
+crop_ratio = aspect_map[ratio_choice]
 
-# ---------------- Display Edited Image ----------------
-st.image(edited, use_column_width=True)
+cropped_img = st_cropper(
+    rotated,
+    realtime_update=True,
+    aspect_ratio=crop_ratio,
+    box_color="#FF0000",
+    box_border=3,
+    box_handle_size=8,
+)
 
-# ---------------- Save / Reset ----------------
-col_save, col_reset = st.columns(2)
+st.image(cropped_img, caption="Preview of Crop", use_column_width=True)
+
+# ---------------- Save / Next ----------------
+col_save, col_next, col_reset = st.columns(3)
+
+def classify_aspect(img):
+    w,h = img.size
+    ratio = w/h
+    if ratio < 0.6:
+        category = "Extra Tall"
+    elif 0.6 <= ratio < 0.9:
+        category = "Portrait"
+    elif 0.9 <= ratio <= 1.1:
+        category = "Square"
+    elif 1.1 < ratio <= 1.8:
+        category = "Landscape"
+    else:
+        category = "Extra Wide"
+    return category
+
 with col_save:
-    if st.button("Save Changes"):
-        edited.save(current_path)
-        st.success(f"Saved edits to: {current_path.name}")
+    if st.button("Save Edited Image"):
+        cropped_img.save(current_image_path)
+        category = classify_aspect(cropped_img)
+        st.success(f"Saved — Aspect Category: {category}")
+        st.balloons()
+
+with col_next:
+    if st.button("Save & Next"):
+        cropped_img.save(current_image_path)
+        category = classify_aspect(cropped_img)
+        if st.session_state.selected < len(all_images)-1:
+            st.session_state.selected += 1
+        # Update thumbnail page if needed
+        if st.session_state.selected >= end_idx and st.session_state.thumb_page < total_pages-1:
+            st.session_state.thumb_page += 1
+        st.experimental_rerun()
 
 with col_reset:
-    if st.button("Reset"):
-        st.session_state.idx = st.session_state.idx  # reload unmodified
+    if st.button("Reset Edits"):
         st.experimental_rerun()
