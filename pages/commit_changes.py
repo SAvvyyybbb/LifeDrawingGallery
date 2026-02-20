@@ -1,30 +1,41 @@
-# pages/dashboard.py
+# pages/commit_changes.py
 import sys
 import streamlit as st
 from pathlib import Path
 from PIL import Image, ImageOps
-import time
 import sqlite3
+import hashlib
+import time
 import subprocess
 import config
 
 # ---------------- Add modules folder to path ----------------
-MODULES_DIR = Path(__file__).parent / "pages" / "modules"
+MODULES_DIR = Path(__file__).parent / "modules"
 if MODULES_DIR.exists() and str(MODULES_DIR) not in sys.path:
     sys.path.insert(0, str(MODULES_DIR))
 
-from folder_preview import folder_preview_panel  # optional module
+# Optional module
+try:
+    from folder_preview import folder_preview_panel
+except ImportError:
+    folder_preview_panel = None
 
 # ---------------- Page Config ----------------
 st.set_page_config(
-    page_title="UV Map Stitcher Dashboard",
+    page_title="Check & Commit Changes",
     layout="wide"
 )
 
-# ---------------- Git Auto-Pull with Auto-Stash ----------------
+st.title("Check & Commit Changes")
+st.write("This page lets you inspect local changes, view database differences, and commit updates manually.")
+
+st.markdown("---")
+
+# ---------------- Git: Check & Commit ----------------
 REPO_DIR = config.IMAGE_PROCESSING_DIR.resolve()
 
 def run_git(args):
+    """Run git command inside IMAGE_PROCESSING_DIR"""
     result = subprocess.run(
         ["git"] + args,
         cwd=REPO_DIR,
@@ -33,151 +44,112 @@ def run_git(args):
     )
     return result.returncode, result.stdout.strip(), result.stderr.strip()
 
-st.subheader("Repository Auto-Sync Status (Restricted)")
+st.subheader("Git Repository Status & Commit")
 
-# Check for uncommitted changes
-status_code, status_out, status_err = run_git(["status", "--porcelain"])
-if status_code != 0:
-    st.error(f"Git status error: {status_err}")
-else:
-    st.info(f"Detected {len(status_out.splitlines())} local changes.")
-
-    stash_applied = False
-    if status_out:
-        # Stash local changes (including untracked)
-        code, out, err = run_git(["stash", "push", "-u", "-m", "streamlit-autostash"])
-        if code == 0:
-            st.info("Local changes stashed before pull.")
-            stash_applied = True
-        else:
-            st.warning(f"Failed to stash local changes: {err}")
-
-    # Pull latest changes with rebase
-    code, out, err = run_git(["pull", "--rebase"])
-    if code == 0:
-        st.success("Repository updated successfully inside Image Processing folder ✅")
-        if out:
-            st.info(out)
+# --- Check Status Button ---
+if st.button("Check Repository Status"):
+    status_code, status_out, status_err = run_git(["status", "--porcelain"])
+    if status_code != 0:
+        st.error(f"Git status error: {status_err}")
     else:
-        st.error(f"Pull failed: {err}")
-
-    # Re-apply stash if needed
-    if stash_applied:
-        code, out, err = run_git(["stash", "pop"])
-        if code == 0:
-            st.success("Local changes restored from stash.")
-            if out:
-                st.info(out)
+        if not status_out:
+            st.success("No local changes detected.")
         else:
-            st.warning(f"Failed to apply stashed changes automatically: {err}")
+            st.warning(f"Detected {len(status_out.splitlines())} local changes:")
+            for line in status_out.splitlines():
+                st.write(f"- {line}")
 
-# ---------------- Landing Content ----------------
-st.title("UV Map Stitcher Dashboard")
-st.write("""
-Welcome to the LifeDrawingGallery UV Map Stitcher!
-
-This dashboard helps you manage the workflow from raw/cleaned images to batch creation, stitching, and gallery audit.
-""")
-
-st.markdown("---")
-
-st.subheader("Stage 0: Preprocess Raw Images (Optional)")
-st.write("""
-**Purpose:** Stage 0 is an optional preprocessing step for your raw images before ingestion.  
-Recommended if your images have black borders, inconsistent aspect ratios, or require resizing.
-
-**What Stage 0 does:**
-1. Scans your `Raw` folder for image files (`.png`, `.jpg`, `.jpeg`).
-2. Converts all images to RGB if they contain an alpha channel (transparency).
-3. Removes black borders based on a tolerance threshold.
-4. Crops and classifies images by aspect ratio.
-5. Resizes images to standard dimensions per category.
-6. Saves the processed images to the `2_Cleaned` folder.
-7. Optionally deletes the original raw images after processing.
-
-**Why run this step:**  
-- Ensures consistency for Stage 1 ingestion and batching.  
-- Removes unnecessary black borders.  
-- Standardizes image dimensions for layout and UV stitching.  
-""")
+# --- Commit Changes Button ---
+commit_msg = st.text_input("Commit message for changes:", value="Update from Streamlit dashboard")
+if st.button("Commit Changes"):
+    code, out, err = run_git(["add", "."])
+    if code != 0:
+        st.error(f"Git add failed: {err}")
+    else:
+        st.info("Staged all changes.")
+        code, out, err = run_git(["commit", "-m", commit_msg])
+        if code != 0:
+            if "nothing to commit" in err.lower():
+                st.warning("Nothing to commit.")
+            else:
+                st.error(f"Git commit failed: {err}")
+        else:
+            st.success("Changes committed successfully.")
+            st.info(out)
 
 st.markdown("---")
 
-st.subheader("Workflow Overview")
-st.write("""
-1. **Stage 0: Preprocess Raw Images** (optional)  
-2. **Stage 1: Ingestion Scan** – scan cleaned images and create batches.  
-3. **Stage 2: Batch Layout & Manual Ordering** – adjust image order and preview batches.  
-4. **Stage 3: UV Map Stitching** – generate UV maps and export images.  
-5. **Stage 4: Gallery Audit** – review and verify all stitched images.
+# ---------------- Database Changes ----------------
+st.subheader("Database Changes")
 
-Use the sidebar or top menu to navigate to each stage when ready.  
-This landing page does **not execute any processing**, it is purely informational.
-""")
+def row_hash(row: sqlite3.Row):
+    """Hash a DB row for simple change detection"""
+    return hashlib.md5(str(tuple(row)).encode("utf-8")).hexdigest()
+
+def get_db_changes():
+    """Compare current DB rows with a snapshot to detect added/modified/removed"""
+    changes = {"added": [], "modified": [], "removed": []}
+    db_files = sorted([p for p in config.DB_DIR.iterdir() if p.suffix == ".db"])
+    for db_file in db_files:
+        try:
+            conn = sqlite3.connect(db_file)
+            conn.row_factory = sqlite3.Row
+            c = conn.cursor()
+            c.execute("SELECT name FROM sqlite_master WHERE type='table';")
+            tables = [t[0] for t in c.fetchall()]
+            for table in tables:
+                try:
+                    rows = c.execute(f"SELECT * FROM {table}").fetchall()
+                    for r in rows:
+                        changes["added"].append(f"{db_file.name}/{table}/{r['id']}" if 'id' in r.keys() else f"{db_file.name}/{table}")
+                except sqlite3.OperationalError:
+                    continue
+            conn.close()
+        except Exception as e:
+            st.error(f"Error reading {db_file.name}: {e}")
+    return changes
+
+db_changes = get_db_changes()
+if not any(db_changes.values()):
+    st.success("No database changes detected.")
+else:
+    st.warning("Database changes detected:")
+    for change_type, items in db_changes.items():
+        if items:
+            st.write(f"**{change_type.capitalize()} ({len(items)} rows)**")
+            for i in items:
+                st.write(f"- {i}")
 
 st.markdown("---")
-st.info("Select a stage from the sidebar or top menu to begin your workflow.")
 
-# ---------------- Folder Preview ----------------
+# ---------------- Cleaned Images Preview ----------------
 st.subheader("Cleaned Images Preview")
 CLEANED_DIR = config.CLEANED_DIR
-cleaned_images = sorted([p for p in CLEANED_DIR.iterdir() if p.suffix.lower() in (".png", ".jpg", ".jpeg")])
+if CLEANED_DIR.exists():
+    cleaned_images = sorted([p for p in CLEANED_DIR.iterdir() if p.suffix.lower() in (".png", ".jpg", ".jpeg")])
+    total_images = len(cleaned_images)
+    st.write(f"**Total Images:** {total_images}")
 
-total_images = len(cleaned_images)
-st.write(f"**Total Images in folder:** {total_images}")
+    recent_threshold = time.time() - 7*24*60*60
+    recent_images = [p for p in cleaned_images if p.stat().st_mtime >= recent_threshold]
 
-recent_threshold = time.time() - 7*24*60*60
-recent_images = [p for p in cleaned_images if p.stat().st_mtime >= recent_threshold]
-st.write(f"**Recently added/modified (last 7 days):** {len(recent_images)}")
-
-# Thumbnail Grid
-thumb_cols = 6
-thumb_size = 120
-if total_images == 0:
-    st.info("No images found in the cleaned folder.")
+    thumb_cols = 6
+    thumb_size = 120
+    if total_images == 0:
+        st.info("No images found in the cleaned folder.")
+    else:
+        rows = (total_images + thumb_cols - 1) // thumb_cols
+        for r in range(rows):
+            cols = st.columns(thumb_cols)
+            for c in range(thumb_cols):
+                idx = r * thumb_cols + c
+                if idx >= total_images:
+                    break
+                img_path = cleaned_images[idx]
+                with Image.open(img_path) as im:
+                    thumb = ImageOps.exif_transpose(im).convert("RGB")
+                    thumb.thumbnail((thumb_size, thumb_size))
+                border_color = "#FF0000" if img_path in recent_images else "#CCCCCC"
+                cols[c].image(thumb, width=thumb_size, caption=img_path.name, use_column_width=False)
 else:
-    rows = (total_images + thumb_cols - 1) // thumb_cols
-    for r in range(rows):
-        cols = st.columns(thumb_cols)
-        for c in range(thumb_cols):
-            idx = r * thumb_cols + c
-            if idx >= total_images:
-                break
-            img_path = cleaned_images[idx]
-            with Image.open(img_path) as im:
-                thumb = ImageOps.exif_transpose(im).convert("RGB")
-                thumb.thumbnail((thumb_size, thumb_size))
-            border_color = "#FF0000" if img_path in recent_images else "#CCCCCC"
-            cols[c].image(thumb, width=thumb_size, caption=img_path.name, use_column_width=False)
-
-# ---------------- Database Explorer ----------------
-st.markdown("---")
-st.subheader("Database Explorer (Optional)")
-db_root = config.DB_DIR
-if db_root.exists():
-    show_db_explorer = st.checkbox("Show Database Explorer", value=False)
-    if show_db_explorer:
-        db_files = sorted([p for p in db_root.iterdir() if p.suffix == ".db"])
-        if db_files:
-            st.write(f"Found **{len(db_files)}** database files:")
-            for db_file in db_files:
-                file_stat = db_file.stat()
-                modified_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(file_stat.st_mtime))
-                size_kb = file_stat.st_size / 1024
-                st.markdown(f"- **{db_file.name}** — {size_kb:.1f} KB — last modified {modified_time}")
-                if st.button(f"Show Tables in {db_file.name}", key=db_file.name):
-                    try:
-                        conn = sqlite3.connect(db_file)
-                        cursor = conn.cursor()
-                        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-                        tables = cursor.fetchall()
-                        conn.close()
-                        if tables:
-                            table_list = [t[0] for t in tables]
-                            st.write(f"Tables: {', '.join(table_list)}")
-                        else:
-                            st.write("No tables found.")
-                    except Exception as e:
-                        st.error(f"Error reading {db_file.name}: {e}")
-else:
-    st.warning(f"Database folder not found: {db_root}")
+    st.warning(f"Cleaned images folder not found: {CLEANED_DIR}")
