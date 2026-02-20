@@ -1,3 +1,4 @@
+# pages/dashboard.py
 import sys
 import streamlit as st
 from pathlib import Path
@@ -5,6 +6,7 @@ from PIL import Image, ImageOps
 import time
 import sqlite3
 import config
+import subprocess
 
 # ---------------- Add modules folder to path ----------------
 MODULES_DIR = Path(__file__).parent / "pages" / "modules"
@@ -19,6 +21,31 @@ st.set_page_config(
     page_title="UV Map Stitcher Dashboard",
     layout="wide"
 )
+
+# ---------------- Git Auto-Pull on Startup ----------------
+REPO_DIR = Path(__file__).resolve().parents[1]  # repo root
+
+def run_git(args):
+    result = subprocess.run(
+        ["git"] + args,
+        cwd=REPO_DIR,
+        capture_output=True,
+        text=True
+    )
+    return result.returncode, result.stdout.strip(), result.stderr.strip()
+
+st.subheader("Repository Sync Status")
+
+# Pull remote changes safely with rebase
+code, out, err = run_git(["pull", "--rebase"])
+if code == 0:
+    st.success("Repository is up to date with remote ✅")
+    if out:
+        st.info(f"Git output:\n{out}")
+else:
+    st.error("Failed to pull remote changes ⚠️")
+    st.error(f"Git output:\n{err}")
+    st.warning("Resolve conflicts manually before continuing.")
 
 # ---------------- Landing Content ----------------
 st.title("UV Map Stitcher Dashboard")
@@ -65,7 +92,6 @@ This landing page does **not execute any processing**, it is purely informationa
 """)
 
 st.markdown("---")
-
 st.info("Select a stage from the sidebar or top menu to begin your workflow.")
 
 # ---------------- Folder Preview as Main Section ----------------

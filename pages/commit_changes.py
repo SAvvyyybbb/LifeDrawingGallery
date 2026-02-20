@@ -7,8 +7,7 @@ import hashlib
 import json
 import config
 
-REPO_DIR = Path(__file__).resolve().parents[1]  # assumes repo root
-
+REPO_DIR = Path(__file__).resolve().parents[1]  # repo root
 
 # ---------- Git Helpers ----------
 def run_git(args):
@@ -20,20 +19,17 @@ def run_git(args):
     )
     return result.returncode, result.stdout.strip(), result.stderr.strip()
 
-
 def get_status():
     code, out, err = run_git(["status", "--porcelain"])
     if code != 0:
         return None, err
     return out.splitlines(), None
 
-
 def get_diff():
     code, out, err = run_git(["diff"])
     if code != 0:
         return None
     return out
-
 
 def commit_and_push(message):
     run_git(["add", "."])
@@ -45,11 +41,9 @@ def commit_and_push(message):
         return False, err or out
     return True, "Commit + push successful"
 
-
 # ---------- Database Helpers ----------
 def row_hash(row):
     return hashlib.sha1(json.dumps(dict(row), sort_keys=True).encode()).hexdigest()
-
 
 def get_db_changes():
     conn = sqlite3.connect(config.DB_PATH)
@@ -100,7 +94,6 @@ def get_db_changes():
     conn.commit()
     conn.close()
     return changes
-
 
 # ---------- Streamlit UI ----------
 st.title("Repository Commit & Database Change Panel")
@@ -169,7 +162,6 @@ st.divider()
 st.subheader("Finalize Commit")
 
 commit_msg = st.text_input("Commit message")
-
 confirm = st.checkbox("I confirm I want to commit these changes")
 
 if st.button("Commit & Push") and confirm:
@@ -177,6 +169,7 @@ if st.button("Commit & Push") and confirm:
         st.warning("Enter a commit message first.")
         st.stop()
 
+    # Only commit & push local changes — no pull
     success, result = commit_and_push(commit_msg)
     if success:
         st.success(result)
