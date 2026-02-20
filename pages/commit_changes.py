@@ -49,12 +49,23 @@ def git_commit(message="Commit via Streamlit"):
 
     # Commit changes
     code, out, err = run_git(["commit", "-m", message])
+
+    # Handle case where nothing to commit
+    if code != 0 and "nothing to commit" in err.lower():
+        return 0, "No changes to commit.", None
+
     return code, out, err
 
 def git_push():
-    """Push commits to the remote repository"""
+    """Push commits to the remote repository using SSH with clean Streamlit messages"""
     code, out, err = run_git(["push"])
-    return code, out, err
+    if code == 0:
+        return True, "✅ Changes pushed to GitHub successfully."
+    else:
+        msg = err or out
+        if "Permission denied" in msg:
+            msg += "\n⚠️ SSH authentication failed. Make sure your SSH key is added to GitHub and loaded."
+        return False, msg
 
 # ---------------- DB Change Tracker ----------------
 SNAPSHOT_FILE = REPO_DIR / ".db_snapshot.txt"
@@ -73,14 +84,12 @@ def get_db_changes():
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
 
-    # Get all tables
     try:
         c.execute("SELECT name FROM sqlite_master WHERE type='table';")
         tables = [t[0] for t in c.fetchall()]
     except Exception:
         tables = []
 
-    # Load previous snapshot
     previous_snapshot = {}
     if SNAPSHOT_FILE.exists():
         with open(SNAPSHOT_FILE, "r", encoding="utf-8") as f:
@@ -242,12 +251,13 @@ commit_msg = st.text_input("Commit message", value="Commit via Streamlit")
 if st.button("Commit & Push Changes"):
     code, out, err = git_commit(commit_msg)
     if code == 0:
-        st.success("Changes committed locally ✅")
-        st.info(out)
-        push_code, push_out, push_err = git_push()
-        if push_code == 0:
-            st.success("Changes pushed to GitHub ✅")
+        st.success("✅ Changes committed locally")
+        if out:
+            st.info(out)
+        push_success, push_msg = git_push()
+        if push_success:
+            st.success(push_msg)
         else:
-            st.error(f"Push failed: {push_err}")
+            st.error(f"Push failed: {push_msg}")
     else:
         st.error(f"Commit failed: {err}")
