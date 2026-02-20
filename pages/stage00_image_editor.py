@@ -33,32 +33,24 @@ def update_modified_hash_only(original_filename, modified_hash):
     conn.commit()
     conn.close()
 
-# ---------------- Choose Folder ----------------
-IMAGE_FOLDERS = {
-    "Raw Images": config.RAW_DIR,
-    "Cleaned Images": config.CLEANED_DIR,
-    "Processed Images": config.IMAGE_PROCESSING_DIR
-}
-
-folder_choice = st.selectbox("Select Image Folder", list(IMAGE_FOLDERS.keys()))
-IMAGE_DIR = IMAGE_FOLDERS[folder_choice]
+# ---------------- Raw Folder ----------------
+IMAGE_DIR = config.RAW_DIR
 
 if not IMAGE_DIR.exists():
-    st.error(f"Folder not found: {IMAGE_DIR}")
+    st.error(f"Raw folder not found: {IMAGE_DIR}")
     st.stop()
 
 all_images = sorted(
     [p for p in IMAGE_DIR.iterdir() if p.suffix.lower() in (".png", ".jpg", ".jpeg")]
 )
 if not all_images:
-    st.info("No images found in this folder.")
+    st.info("No images found in Raw folder.")
     st.stop()
 
-# Reset selection if folder changes
-if "last_folder" not in st.session_state or st.session_state.last_folder != folder_choice:
+# Reset selection if not already in session
+if "selected" not in st.session_state:
     st.session_state.selected = 0
     st.session_state.thumb_page = 0
-    st.session_state.last_folder = folder_choice
 
 # ---------------- Thumbnail Pagination ----------------
 THUMBS_PER_PAGE = 24
