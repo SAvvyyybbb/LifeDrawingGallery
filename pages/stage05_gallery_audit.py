@@ -1,10 +1,12 @@
-# gallery_uv_audit.py
 import streamlit as st
-import pandas as pd
-import config  # <-- your existing config.py
 from pathlib import Path
+import pandas as pd
+from datetime import datetime
 
-# ---------------- Master List of Expected Images ----------------
+# ---------------- Configuration ----------------
+import config
+IMAGE_DIR = config.GALLERY_UVS_DIR
+
 MASTER_LIST = [
     "SQMG01", "SQMG02", "SQMG03", "SQMG04", "SQMG05",
     "SQMG06", "SQMG07", "SQMG08", "SQMG09", "SQMG10",
@@ -15,49 +17,65 @@ MASTER_LIST = [
     "EWMG01",
 ]
 
-# ---------------- Image Directory ----------------
-IMAGE_DIR = config.GALLERY_UVS_DIR
-
 # ---------------- Helper Logic ----------------
 def scan_folder(image_dir: Path):
-    """
-    Returns set of image stems found in folder, plus a flag if folder exists.
-    """
     if not image_dir.exists():
-        return set(), False
-    found = {p.stem for p in image_dir.iterdir() if p.is_file() and p.suffix.lower() == ".png"}
-    return found, True
+        return [], False
+
+    files = []
+    for p in image_dir.iterdir():
+        if p.is_file() and p.suffix.lower() == ".png":
+            created = datetime.fromtimestamp(p.stat().st_ctime)
+            files.append((p.stem, created))
+    return files, True
 
 # ---------------- Streamlit UI ----------------
 st.set_page_config(page_title="Gallery UV Audit", layout="centered")
 st.title("LifeDrawingGallery – UV Image Audit")
-st.caption(f"Checks presence of required images in `{IMAGE_DIR.relative_to(config.ROOT_DIR)}` using project-relative paths.")
+st.caption("Checks presence of required images in `Gallery UVs/` using relative paths.")
 
-found_images, folder_exists = scan_folder(IMAGE_DIR)
+found_files, folder_exists = scan_folder(IMAGE_DIR)
+found_images = {name: created for name, created in found_files}
+
 if not folder_exists:
-    st.error(f"Gallery UVs folder not found at `{IMAGE_DIR}`")
+    st.error(f"Gallery UVs folder not found: {IMAGE_DIR}")
     st.stop()
 
-# ---------------- Build Results Table ----------------
-rows = [{"Name": name, "Status": "Present" if name in found_images else "Missing"} for name in MASTER_LIST]
+# Build results table
+rows = []
+for name in MASTER_LIST:
+    status = "Present" if name in found_images else "Missing"
+    created = found_images[name].strftime("%Y-%m-%d %H:%M:%S") if name in found_images else ""
+    rows.append({
+        "Name": name,
+        "Status": status,
+        "Created": created
+    })
+
 df = pd.DataFrame(rows)
 
 # Unexpected files
-unexpected = sorted(found_images - set(MASTER_LIST))
+unexpected = sorted(set(found_images.keys()) - set(MASTER_LIST))
 
-# ---------------- Display Results ----------------
+# ---------------- Display ----------------
 st.subheader("Required Images")
 st.dataframe(df, use_container_width=True, hide_index=True)
 
 missing_count = (df["Status"] == "Missing").sum()
 present_count = (df["Status"] == "Present").sum()
+
 st.markdown(
-    f"**Summary**\n- Present: **{present_count}**\n- Missing: **{missing_count}**"
+    f"""
+**Summary**
+- Present: **{present_count}**
+- Missing: **{missing_count}**
+"""
 )
 
-st.subheader("Unexpected Files")
 if unexpected:
+    st.subheader("Unexpected Files")
     st.warning("These images exist but are not part of the master list.")
     st.write(unexpected)
 else:
+    st.subheader("Unexpected Files")
     st.success("No unexpected images found.")
