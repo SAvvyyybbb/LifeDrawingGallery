@@ -1,4 +1,4 @@
-# pages/image_editor.py
+# pages/stage00_image_editor.py
 import streamlit as st
 from pathlib import Path
 from PIL import Image
@@ -97,10 +97,10 @@ ratio_choice = st.selectbox(
 aspect_map = {
     "None": None,
     "Square": 1/1,
-    "Portrait": 0.6,     # ratio w/h ~0.6–0.9
-    "Landscape": 1.5,    # ratio w/h ~1.1–1.8
-    "Extra Tall": 0.5,   # ratio w/h <0.6
-    "Extra Wide": 2.0    # ratio w/h >1.8
+    "Portrait": 0.6,     # approximate ratio constraint
+    "Landscape": 1.5,
+    "Extra Tall": 0.5,
+    "Extra Wide": 2.0
 }
 crop_ratio = aspect_map[ratio_choice]
 
@@ -108,9 +108,7 @@ cropped_img = st_cropper(
     rotated,
     realtime_update=True,
     aspect_ratio=crop_ratio,
-    box_color="#FF0000",
-    box_border=3,
-    box_handle_size=8,
+    box_color="#FF0000",  # still supported
 )
 
 st.image(cropped_img, caption="Preview of Crop", use_column_width=True)
