@@ -14,6 +14,7 @@ STITCHED_DIR = IMAGE_PROCESSING_DIR / "3_Stitched"  # final stitched output
 DB_DIR = IMAGE_PROCESSING_DIR / "Databases"  # folder where DBs are stored
 DB_DIR.mkdir(exist_ok=True, parents=True)    # ensure folder exists
 DB_PATH = DB_DIR / "image_data.db"          # new DB file
+GALLERY_UVS_DIR = ROOT_DIR / "Gallery UVs" # UVs are here
 
 # ---------------- Token ----------------
 TOKEN_FILE = ROOT_DIR / ".gitignore" / "token.txt"
