@@ -15,7 +15,7 @@ import config
 
 # ---------------- Configuration ----------------
 TESTING_MODE = getattr(config, "TESTING_MODE", True)
-TEST_MODE_NO_REACT = getattr(config, "TEST_MODE_NO_REACT", 1)  # 1 = no reactions, 0 = normal
+TEST_MODE_NO_REACT = getattr(config, "TEST_MODE_NO_REACT", 1)  # 1 = skip reactions, 0 = normal
 TOKEN = getattr(config, "TOKEN", "")
 CHANNEL_ID = getattr(config, "CHANNEL_ID", 0)
 
@@ -40,11 +40,10 @@ def sha256_bytes(data: bytes) -> str:
 
 def normalize_extension(ext: str) -> str:
     ext = ext.lower()
-    if ext == ".jpeg":
-        return ".jpg"
-    return ext
+    return ".jpg" if ext == ".jpeg" else ext
 
 def init_db():
+    """Ensure DB exists and tables are created."""
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -92,15 +91,14 @@ def init_db():
     return conn, cursor
 
 def get_last_message_id(cursor):
-    if TESTING_MODE or cursor is None:
+    if cursor is None:
         return None
     cursor.execute("SELECT value FROM metadata WHERE key='last_message_id'")
     row = cursor.fetchone()
     return int(row[0]) if row else None
 
 def set_last_message_id(cursor, conn, message_id):
-    if TESTING_MODE or cursor is None:
-        print(f"[DB] TESTING_MODE: Would set last_message_id = {message_id}")
+    if cursor is None:
         return
     cursor.execute(
         "INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)",
@@ -112,11 +110,12 @@ class PhashCache:
     def __init__(self, cursor):
         self.cache = []
         if cursor is None:
-            print("[Cache] TESTING_MODE: No DB loaded.")
+            print("[Cache] No DB loaded.")
             return
         cursor.execute("SELECT hash, phash FROM raw_image_data")
         for row in cursor.fetchall():
-            self.cache.append((row[0], imagehash.hex_to_hash(row[1])))
+            if row[1]:
+                self.cache.append((row[0], imagehash.hex_to_hash(row[1])))
         print(f"[Cache] Loaded {len(self.cache)} phashes from DB.")
 
     def is_duplicate(self, img_phash):
@@ -205,10 +204,9 @@ async def main_logic():
                     cursor.execute("SELECT processing FROM raw_image_data WHERE hash=?", (img_hash,))
                     row = cursor.fetchone()
                     if row and row[0] == 1:
-                        print(f"[Skip] Already processed: {att.filename}")
                         continue
 
-                    # duplicate check
+                    # Duplicate check
                     if phash_cache.is_duplicate(img_phash):
                         message_duplicated = True
                         total_duplicates += 1
@@ -217,7 +215,7 @@ async def main_logic():
                     ext = normalize_extension(os.path.splitext(att.filename)[1] or ".img")
                     filename = f"{img_hash}{ext}"
 
-                    # Always write to RAW_DIR for this dry run
+                    # Always write to RAW_DIR for dry run
                     (RAW_DIR / filename).write_bytes(data)
                     cursor.execute("""
                         INSERT OR IGNORE INTO raw_image_data (
@@ -236,7 +234,7 @@ async def main_logic():
                     total_images += 1
                     batch_commit_count += 1
 
-                # reactions (skip in dry run if TEST_MODE_NO_REACT=1)
+                # Reactions skipped in dry run
                 if not TESTING_MODE and not TEST_MODE_NO_REACT:
                     try:
                         if message_saved:
@@ -254,9 +252,8 @@ async def main_logic():
 
                 set_last_message_id(cursor, conn, msg.id)
 
-        if not TESTING_MODE:
-            conn.commit()
-            conn.close()
+        conn.commit()
+        conn.close()
 
         print(f"[Summary] Messages: {total_messages}, New: {total_images}, Duplicates: {total_duplicates}, Invalid: {total_invalid}")
 
