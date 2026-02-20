@@ -1,174 +1,119 @@
+# pages/image_editor.py
 import streamlit as st
 from pathlib import Path
-from PIL import Image
-import numpy as np
-import imagehash
-import sqlite3
-import hashlib
-from datetime import datetime, timezone
+from PIL import Image, ImageOps
 import config
 
-# ---------------- Config ----------------
-RAW_DIR = config.RAW_DIR
-PROCESSED_DIR = config.CLEANED_DIR
-DB_PATH = config.DB_DIR / "image_data.db"
-TOLERANCE = config.TOLERANCE
+# ---------------- Page Config ----------------
+st.set_page_config(
+    page_title="Image Crop & Rotate",
+    layout="wide"
+)
 
-# ---------------- Helpers ----------------
-def sha256_bytes(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
+st.title("LifeDrawingGallery — Image Crop & Rotate")
 
-def normalize_extension(ext: str) -> str:
-    ext = ext.lower()
-    if ext == ".jpeg":
-        return ".jpg"
-    return ext
+# ---------------- Choose Folder ----------------
+IMAGE_FOLDERS = {
+    "Raw Images": config.RAW_DIR,
+    "Cleaned Images": config.CLEANED_DIR,
+    "Processed Images": config.IMAGE_PROCESSING_DIR
+}
 
-def init_db():
-    """Initialize DB and tables for Stage 0 processing."""
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
+folder_choice = st.selectbox(
+    "Select Image Folder",
+    list(IMAGE_FOLDERS.keys())
+)
 
-    # Table for raw image ingestion
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS raw_image_data (
-            hash TEXT PRIMARY KEY,
-            phash TEXT,
-            poster_id INTEGER,
-            poster_name TEXT,
-            message_id INTEGER,
-            channel_id INTEGER,
-            original_filename TEXT,
-            created_at TEXT,
-            processing INTEGER DEFAULT 0,
-            batched INTEGER DEFAULT 0
-        )
-    """)
+IMAGE_DIR = IMAGE_FOLDERS[folder_choice]
+if not IMAGE_DIR.exists():
+    st.error(f"Folder not found: {IMAGE_DIR}")
+    st.stop()
 
-    # Table for processed images
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS processed_image_data (
-            hash TEXT PRIMARY KEY,
-            phash TEXT,
-            original_hash TEXT,
-            category TEXT,
-            width INTEGER,
-            height INTEGER,
-            created_at TEXT
-        )
-    """)
+all_images = sorted(
+    [p for p in IMAGE_DIR.iterdir() if p.suffix.lower() in (".png", ".jpg", ".jpeg")]
+)
 
-    conn.commit()
-    return conn, cursor
+if not all_images:
+    st.info("No images found in this folder.")
+    st.stop()
 
-# ---------------- Page UI ----------------
-st.title("Stage 0: Preprocess Raw Images (Optional)")
+# ---------------- Session State ----------------
+if "idx" not in st.session_state:
+    st.session_state.idx = 0
 
-raw_files = [f for f in RAW_DIR.iterdir() if f.suffix.lower() in (".png", ".jpg", ".jpeg")]
-total_raw = len(raw_files)
-st.write(f"Found {total_raw} image(s) in Raw folder.")
+# ---------------- Thumbnail Scroller ----------------
+st.subheader("Preview & Jump to Image")
 
-if total_raw == 0:
-    st.info("No images found in Raw folder. Stage 0 skipped.")
-else:
-    if st.button("Run Stage 0: Process Raw Images"):
-        conn, cursor = init_db()
-        success_count = 0
-        failed = []
+thumb_cols = st.columns(8)
+THUMB_SIZE = 80
 
-        progress_bar = st.progress(0)
-        status_text = st.empty()
+for i, img_path in enumerate(all_images[:80]):  # show first 80 thumbnails to avoid heavy load
+    with thumb_cols[i % 8]:
+        thumb = Image.open(img_path)
+        thumb.thumbnail((THUMB_SIZE, THUMB_SIZE))
+        if st.button(img_path.name, key=f"thumb_{i}"):
+            st.session_state.idx = i
 
-        for i, path in enumerate(raw_files):
-            try:
-                data = path.read_bytes()
-                original_hash = sha256_bytes(data)
-                image = Image.open(path)
-                if image.mode == 'RGBA':
-                    image = image.convert('RGB')
-                original_phash = imagehash.phash(image)
+st.write(f"Showing thumbnail navigation for {min(len(all_images), 80)} of {len(all_images)} images.")
 
-                # ---------------- Log raw image ----------------
-                cursor.execute("""
-                    INSERT OR IGNORE INTO raw_image_data (hash, phash, created_at, processing)
-                    VALUES (?, ?, ?, 0)
-                """, (original_hash, str(original_phash), datetime.now(timezone.utc).isoformat()))
+# ---------------- Main Navigation ----------------
+idx = st.session_state.idx
+left, mid, right = st.columns([1, 2, 1])
 
-                # ---------------- Remove black borders ----------------
-                arr = np.array(image)
-                mask = np.all(arr > TOLERANCE, axis=-1)
-                coords = np.argwhere(mask)
-                if coords.size == 0:
-                    failed.append(path.name)
-                    continue
-                y0, x0 = coords.min(axis=0)
-                y1, x1 = coords.max(axis=0) + 1
-                cropped = image.crop((x0, y0, x1, y1)) \
-                    if (x1-x0 < image.width*0.95 or y1-y0 < image.height*0.95) else image
+with left:
+    if st.button("⬅ Previous"):
+        st.session_state.idx = max(idx - 1, 0)
 
-                # ---------------- Aspect ratio classification ----------------
-                w, h = cropped.size
-                ratio = w/h
-                if ratio < 0.6: category = "Extra Tall"
-                elif 0.6 <= ratio < 0.9: category = "Portrait"
-                elif 0.9 <= ratio <= 1.1: category = "Square"
-                elif 1.1 < ratio <= 1.8: category = "Landscape"
-                else: category = "Extra Wide"
+with right:
+    if st.button("Next ➡"):
+        st.session_state.idx = min(idx + 1, len(all_images) - 1)
 
-                # ---------------- Resize ----------------
-                sizes = {
-                    "Square": (512,512),
-                    "Portrait": (512,717),
-                    "Extra Tall": (512,1024),
-                    "Landscape": (717,512),
-                    "Extra Wide": (1024,512)
-                }
-                target_w, target_h = sizes[category]
-                resized = cropped.resize((target_w,target_h), Image.Resampling.LANCZOS)
+current_path = all_images[st.session_state.idx]
+st.write(f"**Editing [{st.session_state.idx+1}/{len(all_images)}]: {current_path.name}**")
 
-                # ---------------- Save processed image ----------------
-                output_dir = PROCESSED_DIR / category
-                output_dir.mkdir(parents=True, exist_ok=True)
-                out_path = output_dir / path.name
-                resized.save(out_path)
-                path.unlink()  # remove raw image
+# Load image once
+image = Image.open(current_path)
 
-                # ---------------- Log processed image ----------------
-                processed_hash = sha256_bytes(resized.tobytes())
-                processed_phash = imagehash.phash(resized)
-                cursor.execute("""
-                    INSERT OR REPLACE INTO processed_image_data (
-                        hash, phash, original_hash, category, width, height, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    processed_hash, str(processed_phash), original_hash,
-                    category, resized.width, resized.height,
-                    datetime.now(timezone.utc).isoformat()
-                ))
+# ---------------- Editing Controls ----------------
+st.markdown("---")
+st.subheader("Crop & Rotate Controls")
 
-                # ---------------- Update processing flag ----------------
-                cursor.execute("""
-                    UPDATE raw_image_data
-                    SET processing=1
-                    WHERE hash=?
-                """, (original_hash,))
+# Rotation
+rotation = st.radio("Rotate:", ["0°", "90°", "180°", "270°"])
+angle_map = {"0°": 0, "90°": 90, "180°": 180, "270°": 270}
+angle = angle_map[rotation]
 
-                conn.commit()
-                success_count += 1
+# Cropping
+crop_enable = st.checkbox("Enable Crop")
+if crop_enable:
+    st.write("Select crop box values:")
+    width, height = image.size
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        x1 = st.number_input("x1", min_value=0, max_value=width, value=0)
+        y1 = st.number_input("y1", min_value=0, max_value=height, value=0)
+    with col2:
+        x2 = st.number_input("x2", min_value=0, max_value=width, value=width)
+        y2 = st.number_input("y2", min_value=0, max_value=height, value=height)
 
-            except Exception as e:
-                failed.append(path.name)
-                print(f"Error processing {path.name}: {e}")
+# Apply transforms
+edited = image.rotate(angle, expand=True)
 
-            progress_bar.progress((i+1)/total_raw)
-            status_text.text(f"Processed {i+1}/{total_raw} images...")
+if crop_enable:
+    edited = edited.crop((x1, y1, x2, y2))
 
-        st.success("Stage 0 processing complete!")
-        st.write(f"Total images: {total_raw}")
-        st.write(f"Successfully processed: {success_count}")
-        st.write(f"Failed images: {len(failed)}")
-        if failed:
-            st.warning("Failed images:")
-            st.write(failed)
-        conn.close()
+# ---------------- Display Edited Image ----------------
+st.image(edited, use_column_width=True)
+
+# ---------------- Save / Reset ----------------
+col_save, col_reset = st.columns(2)
+with col_save:
+    if st.button("Save Changes"):
+        edited.save(current_path)
+        st.success(f"Saved edits to: {current_path.name}")
+
+with col_reset:
+    if st.button("Reset"):
+        st.session_state.idx = st.session_state.idx  # reload unmodified
+        st.experimental_rerun()
