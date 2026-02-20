@@ -62,6 +62,7 @@ def get_db_changes():
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
 
+    # Get all table names
     try:
         c.execute("SELECT name FROM sqlite_master WHERE type='table';")
         tables = [t[0] for t in c.fetchall()]
@@ -78,10 +79,16 @@ def get_db_changes():
     new_snapshot_lines = []
 
     for table in tables:
-        current = {}  # Initialize to avoid UnboundLocalError
+        current = {}
         try:
             rows = c.execute(f"SELECT * FROM {table}").fetchall()
-            current = {r["id"]: row_hash(r) for r in rows}
+            # Use 'id' if exists, else fallback to rowid
+            if rows and "id" in rows[0].keys():
+                current = {r["id"]: row_hash(r) for r in rows}
+            else:
+                # fallback rowid
+                rows = c.execute(f"SELECT rowid, * FROM {table}").fetchall()
+                current = {r["rowid"]: row_hash(r) for r in rows}
         except sqlite3.OperationalError:
             continue
 
@@ -145,14 +152,35 @@ st.title("Repository Commit & Database Tracker")
 
 # ---------------- Git Status ----------------
 st.subheader("Check Repository Status")
+IGNORED_PATTERNS = [
+    ".streamlit/",
+]
+
+def filter_git_status(lines):
+    filtered = []
+    for line in lines:
+        # line format: XY <path>
+        path = line[3:] if len(line) > 3 else line
+        # ignore .streamlit and any __pycache__ recursively
+        if path.startswith(".streamlit/"):
+            continue
+        if "__pycache__" in path:
+            continue
+        filtered.append(line)
+    return filtered
+
 if st.button("Check Repository Status"):
     lines, err = git_status()
     if err:
         st.error(f"Git error: {err}")
     else:
-        st.info(f"Detected {len(lines)} local changes:")
-        for l in lines:
-            st.text(l)
+        lines = filter_git_status(lines)
+        if not lines:
+            st.success("No tracked changes detected ✅")
+        else:
+            st.info(f"Detected {len(lines)} local changes:")
+            for l in lines:
+                st.text(l)
 
 # ---------------- Database Changes ----------------
 st.markdown("---")
@@ -165,7 +193,6 @@ else:
         with st.expander(f"{change_type.capitalize()} ({sum(len(v) for v in tables.values())} rows)"):
             for table, rows in tables.items():
                 st.write(f"**Table {table}:** {len(rows)} rows")
-                # Display row IDs only
                 st.text(", ".join(str(rid) for rid in rows))
 
 # ---------------- Folder Tracker ----------------
@@ -184,7 +211,7 @@ else:
             for f, c in removed.items():
                 st.write(f"{f}: {c} images")
     if modified:
-        with st.expander(f"Modified Folders ({len(modified)})"):
+        with st.expander(f"Modified Folders ({len(modified})}"):
             for f, counts in modified.items():
                 st.write(f"{f}: {counts[0]} → {counts[1]} images")
 
