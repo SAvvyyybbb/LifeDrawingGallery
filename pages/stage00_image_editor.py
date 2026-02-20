@@ -94,13 +94,14 @@ ratio_choice = st.selectbox(
     ["None","Square","Portrait","Landscape","Extra Tall","Extra Wide"]
 )
 
+# Use tuples for width:height ratios
 aspect_map = {
     "None": None,
-    "Square": 1/1,
-    "Portrait": 0.6,     # approximate ratio constraint
-    "Landscape": 1.5,
-    "Extra Tall": 0.5,
-    "Extra Wide": 2.0
+    "Square": (1,1),
+    "Portrait": (3,5),
+    "Landscape": (3,2),
+    "Extra Tall": (1,2),
+    "Extra Wide": (2,1)
 }
 crop_ratio = aspect_map[ratio_choice]
 
@@ -108,7 +109,7 @@ cropped_img = st_cropper(
     rotated,
     realtime_update=True,
     aspect_ratio=crop_ratio,
-    box_color="#FF0000",  # still supported
+    box_color="#FF0000",
 )
 
 st.image(cropped_img, caption="Preview of Crop", use_column_width=True)
