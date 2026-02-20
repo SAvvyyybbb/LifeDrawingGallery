@@ -6,6 +6,7 @@ import subprocess
 import sqlite3
 import hashlib
 import os
+import shlex
 import config
 
 # ---------------- Add modules folder to path ----------------
@@ -23,16 +24,19 @@ st.set_page_config(
 REPO_DIR = config.IMAGE_PROCESSING_DIR.resolve()
 
 # ---------------- Deploy Key Setup ----------------
-# Write the deploy key from Streamlit secrets to a temp file
+# Write the deploy key from Streamlit secrets to a file
 DEPLOY_KEY_PATH = REPO_DIR / "streamlit_deploy_key"
 DEPLOY_KEY_PATH.write_text(st.secrets["GITHUB_SSH_KEY"])
-os.chmod(DEPLOY_KEY_PATH, 0o600)  # secure permissions
+os.chmod(DEPLOY_KEY_PATH, 0o600)
 
-# Environment for all Git subprocess calls
+# Quote the path to handle spaces in folder names
+deploy_key_quoted = shlex.quote(str(DEPLOY_KEY_PATH))
+
+# Environment for all Git commands
 GIT_ENV = os.environ.copy()
-GIT_ENV["GIT_SSH_COMMAND"] = f"ssh -i {DEPLOY_KEY_PATH} -o IdentitiesOnly=yes"
+GIT_ENV["GIT_SSH_COMMAND"] = f"ssh -i {deploy_key_quoted} -o IdentitiesOnly=yes"
 
-# Force the repo to use SSH remote
+# Ensure the remote uses SSH
 subprocess.run(
     ["git", "remote", "set-url", "origin", "git@github.com:SAvvyyybbb/LifeDrawingGallery.git"],
     cwd=REPO_DIR,
@@ -40,7 +44,7 @@ subprocess.run(
 )
 
 def run_git(args):
-    """Run Git in the repo using SSH deploy key"""
+    """Run Git in the repo using the deploy key"""
     result = subprocess.run(
         ["git"] + args,
         cwd=REPO_DIR,
@@ -50,7 +54,6 @@ def run_git(args):
     )
     return result.returncode, result.stdout.strip(), result.stderr.strip()
 
-
 def git_status():
     code, out, err = run_git(["status", "--porcelain"])
     if code != 0:
@@ -58,37 +61,34 @@ def git_status():
     lines = out.splitlines()
     return lines, None
 
-
 def git_commit(message="Commit via Streamlit"):
     """Stage all changes and commit with a local Git identity"""
     # Stage all changes
     run_git(["add", "."])
 
-    # Set local user identity (repo-specific)
+    # Set repo-local Git identity
     run_git(["config", "user.name", "Streamlit Bot"])
     run_git(["config", "user.email", "bot@example.com"])
 
-    # Commit changes
+    # Commit
     code, out, err = run_git(["commit", "-m", message])
 
-    # Handle case where nothing to commit
+    # Handle nothing to commit
     if code != 0 and err and "nothing to commit" in err.lower():
         return 0, "No changes to commit.", None
 
     return code, out, err
 
-
 def git_push():
-    """Push commits to the remote repository using deploy key"""
+    """Push commits using SSH deploy key"""
     code, out, err = run_git(["push"])
     if code == 0:
         return True, "✅ Changes pushed to GitHub successfully."
     else:
         msg = err or out
         if "Permission denied" in msg:
-            msg += "\n⚠️ SSH authentication failed. Make sure your deploy key is valid."
+            msg += "\n⚠️ SSH authentication failed. Check your deploy key."
         return False, msg
-
 
 # ---------------- DB Change Tracker ----------------
 SNAPSHOT_FILE = REPO_DIR / ".db_snapshot.txt"
@@ -156,7 +156,6 @@ def get_db_changes():
     conn.close()
     return changes
 
-
 # ---------------- Folder Tracker ----------------
 FOLDER_SNAPSHOT_FILE = REPO_DIR / ".folder_snapshot.txt"
 
@@ -190,7 +189,6 @@ def get_folder_changes():
             f.write(f"{name}|{','.join(files_rel)}\n")
 
     return added, removed, modified
-
 
 # ---------------- UI ----------------
 st.title("Repository Commit & Database Tracker")
