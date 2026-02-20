@@ -7,7 +7,6 @@ import config
 import math
 import sqlite3
 import hashlib
-import imagehash
 from datetime import datetime, timezone
 
 # ---------------- Page Config ----------------
@@ -21,15 +20,37 @@ st.title("LifeDrawingGallery — Image Crop & Rotate")
 # ---------------- Database ----------------
 DB_PATH = config.DB_DIR / "image_data.db"
 
-def update_modified_hash_only(original_filename, modified_hash):
-    """Update only the modified_hash for an edited image."""
+def sha256_bytes(data: bytes):
+    return hashlib.sha256(data).hexdigest()
+
+def update_modified_hash(filename, original_hash, modified_hash):
+    """
+    Update existing record with modified hash.
+
+    Matching priority:
+        filename → original_hash → modified_hash
+
+    This guarantees edits always attach to the correct original record.
+    """
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
+
     cursor.execute("""
         UPDATE raw_image_data
-        SET modified_hash=?, processing=0
+        SET modified_hash=?,
+            processing=0,
+            updated_at=?
         WHERE original_filename=?
-    """, (modified_hash, original_filename))
+           OR original_hash=?
+           OR modified_hash=?
+    """, (
+        modified_hash,
+        datetime.now(timezone.utc).isoformat(),
+        filename,
+        original_hash,
+        original_hash
+    ))
+
     conn.commit()
     conn.close()
 
@@ -71,7 +92,7 @@ start_idx = st.session_state.thumb_page * THUMBS_PER_PAGE
 end_idx = min(start_idx + THUMBS_PER_PAGE, len(all_images))
 thumb_images = all_images[start_idx:end_idx]
 
-# Display thumbnails
+# ---------------- Thumbnails ----------------
 cols = st.columns(NUM_COLS)
 for i, img_path in enumerate(thumb_images):
     with cols[i % NUM_COLS]:
@@ -96,17 +117,15 @@ angle = st.slider(
     max_value=180,
     value=0,
     step=1,
-    help="Negative rotates left, positive rotates right"
 )
 rotated = image.rotate(angle, expand=True)
 
-# ---------------- Crop with Aspect Ratio ----------------
+# ---------------- Aspect Ratio ----------------
 ratio_choice = st.selectbox(
     "Constrain Crop Aspect Ratio",
     ["None","Square","Portrait","Landscape","Extra Tall","Extra Wide"]
 )
 
-# Aspect ratio tuples (width, height)
 aspect_map = {
     "None": None,
     "Square": (1,1),
@@ -126,9 +145,7 @@ cropped_img = st_cropper(
 
 st.image(cropped_img, caption="Preview of Crop", use_column_width=True)
 
-# ---------------- Save / Next / Reset ----------------
-col_save, col_next, col_reset = st.columns(3)
-
+# ---------------- Aspect Classification ----------------
 def classify_aspect(img):
     w,h = img.size
     ratio = w/h
@@ -143,45 +160,55 @@ def classify_aspect(img):
     else:
         return "Extra Wide"
 
-# ---------------- Save Edited Image ----------------
+# ---------------- Save Logic ----------------
+def save_edit_and_update_db(path, cropped_img):
+    try:
+        # hash BEFORE overwrite
+        original_bytes = path.read_bytes()
+        original_hash = sha256_bytes(original_bytes)
+
+        # overwrite file
+        cropped_img.save(path)
+
+        # hash AFTER overwrite
+        new_bytes = path.read_bytes()
+        modified_hash = sha256_bytes(new_bytes)
+
+        # update DB record
+        update_modified_hash(path.name, original_hash, modified_hash)
+
+        return modified_hash
+
+    except Exception as e:
+        st.error(f"Save failed: {e}")
+        return None
+
+# ---------------- Buttons ----------------
+col_save, col_next, col_reset = st.columns(3)
+
+# Save
 with col_save:
     if st.button("Save Edited Image"):
-        try:
-            # Overwrite file
-            cropped_img.save(current_image_path)
-
-            # Compute modified hash
-            data = current_image_path.read_bytes()
-            mod_hash = hashlib.sha256(data).hexdigest()
-
-            # Update only modified_hash in DB
-            update_modified_hash_only(current_image_path.name, mod_hash)
-
+        mod_hash = save_edit_and_update_db(current_image_path, cropped_img)
+        if mod_hash:
             category = classify_aspect(cropped_img)
-            st.success(f"Saved — Aspect Category: {category}")
+            st.success(f"Saved ✓  | Aspect: {category}")
             st.balloons()
-        except Exception as e:
-            st.error(f"Error saving image: {e}")
 
-# ---------------- Save & Next ----------------
+# Save + Next
 with col_next:
     if st.button("Save & Next"):
-        try:
-            cropped_img.save(current_image_path)
-            data = current_image_path.read_bytes()
-            mod_hash = hashlib.sha256(data).hexdigest()
-            update_modified_hash_only(current_image_path.name, mod_hash)
-        except Exception as e:
-            st.error(f"Error saving image: {e}")
+        save_edit_and_update_db(current_image_path, cropped_img)
 
-        # Move to next image
         if st.session_state.selected < len(all_images)-1:
             st.session_state.selected += 1
+
         if st.session_state.selected >= end_idx and st.session_state.thumb_page < total_pages-1:
             st.session_state.thumb_page += 1
+
         st.experimental_rerun()
 
-# ---------------- Reset Edits ----------------
+# Reset
 with col_reset:
     if st.button("Reset Edits"):
         st.experimental_rerun()
