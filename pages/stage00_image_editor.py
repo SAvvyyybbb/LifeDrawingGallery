@@ -82,9 +82,14 @@ image = Image.open(current_image_path)
 st.markdown("---")
 st.subheader("Rotate & Crop")
 
-rotate_option = st.radio("Rotate:", ["0°","90°","180°","270°"])
-angle_map = {"0°":0,"90°":90,"180°":180,"270°":270}
-angle = angle_map[rotate_option]
+# Slider for rotation: 0–360 degrees
+angle = st.slider(
+    "Rotate Image (degrees)",
+    min_value=0,
+    max_value=360,
+    value=0,
+    step=1
+)
 
 rotated = image.rotate(angle, expand=True)
 
