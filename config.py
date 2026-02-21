@@ -10,6 +10,11 @@ RAW_DIR = IMAGE_PROCESSING_DIR / "1_Raw"          # raw images
 CLEANED_DIR = IMAGE_PROCESSING_DIR / "2_Cleaned"  # processed / cleaned images
 STITCHED_DIR = IMAGE_PROCESSING_DIR / "3_Stitched"  # final stitched output
 
+#--------------Folder placeholder-------------------
+
+RAW_DIR.mkdir(parents=True, exist_ok=True)
+CLEANED_DIR.mkdir(parents=True, exist_ok=True)
+
 # ---------------- Database ----------------
 DB_DIR = IMAGE_PROCESSING_DIR / "Databases"  # folder where DBs are stored
 DB_DIR.mkdir(exist_ok=True, parents=True)    # ensure folder exists
