@@ -13,7 +13,7 @@ OUTPUT_SIZE = config.OUTPUT_SIZE
 
 st.title("Batch Layout & Manual Ordering")
 st.write(
-    "Preview layout for UV map upload. Reorder images or move them between batches."
+    "Preview layout for UV map upload. Reorder images or reassign them to a different batch (same aspect category)."
 )
 
 # ---------------- Verify DB ----------------
@@ -61,7 +61,6 @@ def render_batch_preview(df_ordered, scale=0.25):
     aspect = df_ordered["aspect_category"].iloc[0]
     num_images = len(df_ordered)
 
-    # grid logic
     if aspect in ["Extra Wide", "Landscape"]:
         cols = min(2, num_images)
     else:
@@ -71,7 +70,6 @@ def render_batch_preview(df_ordered, scale=0.25):
 
     tile_w = int(OUTPUT_SIZE / max(cols, 1) * scale)
     tile_h = int(OUTPUT_SIZE / max(rows, 1) * scale)
-
     preview_img = Image.new("RGB", (cols * tile_w, rows * tile_h), (30, 30, 30))
 
     try:
@@ -128,18 +126,15 @@ def render_batch_preview(df_ordered, scale=0.25):
 
 def update_order(img_id, value):
     conn.execute(
-        "UPDATE images SET manual_order=? WHERE id=?",
-        (int(value), int(img_id)),
+        "UPDATE images SET manual_order=? WHERE id=?", (int(value), int(img_id))
     )
     conn.commit()
 
 
 def shift_order(img_id, direction):
     cur = conn.execute(
-        "SELECT manual_order, batch_id FROM images WHERE id=?",
-        (img_id,),
+        "SELECT manual_order, batch_id FROM images WHERE id=?", (img_id,)
     ).fetchone()
-
     if not cur:
         return
 
@@ -153,14 +148,27 @@ def shift_order(img_id, direction):
 
     if swap:
         conn.execute(
-            "UPDATE images SET manual_order=? WHERE id=?",
-            (swap["manual_order"], img_id),
+            "UPDATE images SET manual_order=? WHERE id=?", (swap["manual_order"], img_id)
         )
         conn.execute(
-            "UPDATE images SET manual_order=? WHERE id=?",
-            (current_order, swap["id"]),
+            "UPDATE images SET manual_order=? WHERE id=?", (current_order, swap["id"])
         )
         conn.commit()
+
+
+def reassign_batch(img_id, new_batch_id):
+    # Get current max manual_order in new batch
+    max_order = conn.execute(
+        "SELECT MAX(manual_order) as max_order FROM images WHERE batch_id=?",
+        (new_batch_id,),
+    ).fetchone()["max_order"]
+    new_order = 1 if max_order is None else max_order + 1
+
+    conn.execute(
+        "UPDATE images SET batch_id=?, manual_order=? WHERE id=?",
+        (new_batch_id, new_order, img_id),
+    )
+    conn.commit()
 
 
 # ---------------- Main Workflow ----------------
@@ -174,12 +182,10 @@ if df_batches.empty:
 # ---------- selectors ----------
 primary_options = sorted(df_batches["primary_folder"].dropna().unique())
 selected_primary = st.selectbox("Primary Folder", primary_options)
-
 df_primary = df_batches[df_batches["primary_folder"] == selected_primary]
 
 secondary_options = sorted(df_primary["aspect_ratio"].dropna().unique())
 selected_secondary = st.selectbox("Aspect Folder", secondary_options)
-
 df_secondary = df_primary[df_primary["aspect_ratio"] == selected_secondary]
 
 batch_map = dict(zip(df_secondary["id"], df_secondary["batch_name"]))
@@ -192,7 +198,6 @@ selected_batch_id = st.selectbox(
 
 # ---------- load images ----------
 df_images = load_images(selected_batch_id)
-
 if df_images.empty:
     st.info("No images in this batch.")
     conn.close()
@@ -201,16 +206,20 @@ if df_images.empty:
 # ---------- preview ----------
 st.subheader("Batch Preview")
 render_batch_preview(df_images.sort_values("manual_order").reset_index(drop=True))
-
 st.divider()
 
 # ---------- compact editor ----------
-st.subheader("Reorder Images")
+st.subheader("Reorder / Reassign Images")
 
 cols_per_row = 6
 rows = math.ceil(len(df_images) / cols_per_row)
-
 idx = 0
+
+# Precompute allowed batches per aspect_category
+aspect_category = df_images.iloc[0]["aspect_category"]
+allowed_batches = df_secondary[df_secondary["aspect_ratio"] == aspect_category]
+batch_options = {row["id"]: row["batch_name"] for _, row in allowed_batches.iterrows()}
+
 for r in range(rows):
     cols = st.columns(cols_per_row)
 
@@ -219,7 +228,6 @@ for r in range(rows):
             break
 
         row = df_images.iloc[idx]
-
         with cols[c]:
             img_name = Path(row["file_path"]).name
             img_path = CLEANED_DIR / row["aspect_category"] / img_name
@@ -229,6 +237,7 @@ for r in range(rows):
             except:
                 st.empty()
 
+            # ---------- numeric order ----------
             new_val = st.number_input(
                 "Order",
                 value=int(row["manual_order"]),
@@ -236,19 +245,32 @@ for r in range(rows):
                 key=f"order_{row['id']}",
                 label_visibility="collapsed",
             )
-
             if new_val != row["manual_order"]:
                 update_order(row["id"], new_val)
-                st.rerun()
+                st.experimental_rerun()
 
+            # ---------- batch reassignment ----------
+            new_batch = st.selectbox(
+                "Batch",
+                options=list(batch_options.keys()),
+                format_func=lambda x: batch_options[x],
+                index=list(batch_options.keys()).index(row["batch_id"]),
+                key=f"batch_{row['id']}",
+                label_visibility="collapsed",
+            )
+            if new_batch != row["batch_id"]:
+                reassign_batch(row["id"], new_batch)
+                st.experimental_rerun()
+
+            # ---------- up / down ----------
             b1, b2 = st.columns(2)
             if b1.button("↑", key=f"up_{row['id']}"):
                 shift_order(row["id"], -1)
-                st.rerun()
+                st.experimental_rerun()
 
             if b2.button("↓", key=f"down_{row['id']}"):
                 shift_order(row["id"], 1)
-                st.rerun()
+                st.experimental_rerun()
 
         idx += 1
 
