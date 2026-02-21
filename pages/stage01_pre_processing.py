@@ -15,12 +15,15 @@ PROCESSED_DIR = config.CLEANED_DIR
 TOLERANCE = config.TOLERANCE
 DB_PATH = config.DB_DIR / "image_data.db"
 
+# auto-derive stitched leftovers root
+STITCHED_ROOT = PROCESSED_DIR.parent / "3_Stitched"
+
 # ---------------- Helpers ----------------
 def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
+
 def init_db():
-    """Initialize DB and ensure tables exist."""
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -37,17 +40,11 @@ def init_db():
             created_at TEXT
         )
     """)
-
     conn.commit()
     return conn, cursor
 
 
 def find_raw_record(cursor, img_path, img_hash):
-    """
-    Returns original raw hash.
-    Prefers modified_hash match first (edited images),
-    otherwise falls back to original hash.
-    """
     cursor.execute("""
         SELECT hash FROM raw_image_data
         WHERE modified_hash=? OR hash=? OR original_filename=?
@@ -57,10 +54,6 @@ def find_raw_record(cursor, img_path, img_hash):
 
 
 def raw_record_exists(cursor, img_hash):
-    """
-    Determines whether this image already exists in raw table
-    by checking BOTH original hash and modified hash.
-    """
     cursor.execute("""
         SELECT 1 FROM raw_image_data
         WHERE hash=? OR modified_hash=?
@@ -69,10 +62,6 @@ def raw_record_exists(cursor, img_hash):
 
 
 def is_duplicate(cursor, original_hash, phash):
-    """
-    Checks if a processed image already exists
-    based on either original_hash or phash.
-    """
     cursor.execute("""
         SELECT 1 FROM processed_image_data
         WHERE original_hash=? OR phash=?
@@ -80,19 +69,46 @@ def is_duplicate(cursor, original_hash, phash):
     return cursor.fetchone() is not None
 
 
-# ---------------- UI ----------------
-st.title("Stage 1: Preprocess Raw Images (Duplicate-Safe Edition)")
+# ---------------- Leftover Loader ----------------
+def collect_leftover_files():
+    files = []
+    if not STITCHED_ROOT.exists():
+        return files
 
-if not RAW_DIR.exists() or not any(RAW_DIR.iterdir()):
-    st.warning(f"No raw images found in {RAW_DIR}. Stage 1 cannot run.")
+    for folder in STITCHED_ROOT.glob("Leftovers_*"):
+        for f in folder.rglob("*"):
+            if f.suffix.lower() in (".png", ".jpg", ".jpeg"):
+                files.append(f)
+    return files
+
+
+# ---------------- UI ----------------
+st.title("Stage 1: Preprocess Raw Images")
+
+include_leftovers = st.toggle("Reintroduce leftover images from previous batches", value=False)
+
+if not RAW_DIR.exists():
+    st.warning(f"No raw directory found: {RAW_DIR}")
     st.stop()
 
 raw_files = [f for f in RAW_DIR.iterdir() if f.suffix.lower() in (".png",".jpg",".jpeg")]
+
+if include_leftovers:
+    leftovers = collect_leftover_files()
+    raw_files.extend(leftovers)
+    st.info(f"Including {len(leftovers)} leftover image(s)")
+
 total_raw = len(raw_files)
 
-st.write(f"Found {total_raw} image(s) in Raw folder.")
+if total_raw == 0:
+    st.warning("No images found to process.")
+    st.stop()
 
-if st.button("Run Stage 1: Process Raw Images"):
+st.write(f"Total images queued: {total_raw}")
+
+
+# ---------------- Processing ----------------
+if st.button("Run Stage 1 Processing"):
 
     conn, cursor = init_db()
 
@@ -106,25 +122,19 @@ if st.button("Run Stage 1: Process Raw Images"):
     for i, path in enumerate(raw_files):
 
         try:
-            # ---------- Hashes ----------
             data = path.read_bytes()
             img_hash = sha256_bytes(data)
             img_phash = str(imagehash.phash(Image.open(path)))
 
-            # ---------- Link to Raw ----------
             linked_hash = find_raw_record(cursor, path, img_hash)
             original_hash = linked_hash or img_hash
 
-            # ---------- Prevent duplicate processed entries ----------
             if is_duplicate(cursor, original_hash, img_phash):
-                status_text.text(f"Skipping {path.name} (duplicate detected)")
                 skipped_duplicates += 1
                 progress_bar.progress((i+1)/total_raw)
                 continue
 
-            # ---------- Ensure raw record exists ----------
             if not raw_record_exists(cursor, img_hash):
-
                 cursor.execute("""
                     INSERT INTO raw_image_data
                     (hash, phash, original_filename, created_at, processing)
@@ -136,7 +146,6 @@ if st.button("Run Stage 1: Process Raw Images"):
                     datetime.now(timezone.utc).isoformat()
                 ))
 
-            # ---------- Load image ----------
             image = Image.open(path)
 
             if image.mode == 'RGBA':
@@ -144,7 +153,6 @@ if st.button("Run Stage 1: Process Raw Images"):
 
             arr = np.array(image)
 
-            # ---------- Border detection ----------
             mask = np.all(arr > TOLERANCE, axis=-1)
             coords = np.argwhere(mask)
 
@@ -161,7 +169,6 @@ if st.button("Run Stage 1: Process Raw Images"):
                 else image
             )
 
-            # ---------- Aspect classification ----------
             w,h = cropped.size
             ratio = w/h
 
@@ -171,7 +178,6 @@ if st.button("Run Stage 1: Process Raw Images"):
             elif ratio <= 1.8: category="Landscape"
             else: category="Extra Wide"
 
-            # ---------- Resize ----------
             sizes = {
                 "Square":(512,512),
                 "Portrait":(512,717),
@@ -183,7 +189,6 @@ if st.button("Run Stage 1: Process Raw Images"):
             target_w,target_h = sizes[category]
             resized = cropped.resize((target_w,target_h), Image.Resampling.LANCZOS)
 
-            # ---------- Save processed ----------
             output_dir = PROCESSED_DIR / category
             output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -193,7 +198,6 @@ if st.button("Run Stage 1: Process Raw Images"):
             processed_hash = sha256_bytes(out_path.read_bytes())
             processed_phash = str(imagehash.phash(resized))
 
-            # ---------- Insert processed ----------
             cursor.execute("""
                 INSERT INTO processed_image_data (
                     hash, phash, original_hash, original_filename,
@@ -210,14 +214,17 @@ if st.button("Run Stage 1: Process Raw Images"):
                 datetime.now(timezone.utc).isoformat()
             ))
 
-            # ---------- Mark raw processed ----------
             cursor.execute(
                 "UPDATE raw_image_data SET processing=1 WHERE hash=?",
                 (original_hash,)
             )
 
-            # ---------- Delete raw file ----------
-            path.unlink()
+            # ---------- Delete source file AFTER success ----------
+            try:
+                path.unlink()
+            except Exception as cleanup_err:
+                print(f"Cleanup warning for {path}: {cleanup_err}")
+
             success_count += 1
 
         except Exception as e:
@@ -225,16 +232,16 @@ if st.button("Run Stage 1: Process Raw Images"):
             print(f"Error processing {path.name}: {e}")
 
         progress_bar.progress((i+1)/total_raw)
-        status_text.text(f"Processed {i+1}/{total_raw} images...")
+        status_text.text(f"Processed {i+1}/{total_raw}")
         conn.commit()
 
-    # ---------- Summary ----------
-    st.success("Stage 1 processing complete!")
+    # ---------------- Summary ----------------
+    st.success("Processing complete")
 
-    st.write(f"Total raw images: {total_raw}")
-    st.write(f"Successfully processed: {success_count}")
-    st.write(f"Skipped duplicates: {skipped_duplicates}")
-    st.write(f"Failed images: {len(failed)}")
+    st.write(f"Total input images: {total_raw}")
+    st.write(f"Processed successfully: {success_count}")
+    st.write(f"Duplicates skipped: {skipped_duplicates}")
+    st.write(f"Failed: {len(failed)}")
 
     if failed:
         st.warning("Failed images:")
