@@ -227,47 +227,47 @@ for i in range(0, len(df_images), cols_per_row):
     cols = st.columns(len(row_images))
     for col, (_, row) in zip(cols, row_images.iterrows()):
         with col:
-            img_path = CLEANED_DIR / row["aspect_category"] / Path(row["file_path"]).name
-            try:
-                st.image(img_path, use_container_width=True)
-            except:
-                st.empty()
+            with st.container():  # each image + widgets in its own container
+                img_path = CLEANED_DIR / row["aspect_category"] / Path(row["file_path"]).name
+                try:
+                    st.image(img_path, use_container_width=True)
+                except:
+                    st.empty()
 
-            # numeric order input
-            new_val = st.number_input(
-                "Order",
-                value=int(row["manual_order"]),
-                step=1,
-                key=f"order_{row['id']}",
-                label_visibility="collapsed",
-            )
-            if new_val != row["manual_order"]:
-                update_order(row["id"], new_val)
-                trigger_rerun()
+                # numeric order input
+                new_val = st.number_input(
+                    "Order",
+                    value=int(row["manual_order"]),
+                    step=1,
+                    key=f"order_{row['id']}",
+                    label_visibility="collapsed",
+                )
+                if new_val != row["manual_order"]:
+                    update_order(row["id"], new_val)
+                    trigger_rerun()
 
-            # batch reassignment dropdown
-            allowed_keys = list(batch_options.keys())
-            selected_index = allowed_keys.index(row["batch_id"]) if row["batch_id"] in allowed_keys else 0
+                # batch reassignment dropdown
+                allowed_keys = list(batch_options.keys())
+                selected_index = allowed_keys.index(row["batch_id"]) if row["batch_id"] in allowed_keys else 0
+                new_batch = st.selectbox(
+                    "Batch",
+                    options=allowed_keys,
+                    format_func=lambda x: batch_options[x],
+                    index=selected_index,
+                    key=f"batch_{row['id']}_batch",
+                    label_visibility="collapsed",
+                )
+                if new_batch != row["batch_id"]:
+                    reassign_batch(row["id"], new_batch)
+                    trigger_rerun()
 
-            new_batch = st.selectbox(
-                "Batch",
-                options=allowed_keys,
-                format_func=lambda x: batch_options[x],
-                index=selected_index,
-                key=f"batch_{row['id']}",
-                label_visibility="collapsed",
-            )
-            if new_batch != row["batch_id"]:
-                reassign_batch(row["id"], new_batch)
-                trigger_rerun()
-
-            # up / down buttons
-            b1, b2 = st.columns(2)
-            if b1.button("↑", key=f"up_{row['id']}"):
-                shift_order(row["id"], -1)
-                trigger_rerun()
-            if b2.button("↓", key=f"down_{row['id']}"):
-                shift_order(row["id"], 1)
-                trigger_rerun()
+                # up / down buttons
+                b1, b2 = st.columns(2)
+                if b1.button("↑", key=f"up_{row['id']}"):
+                    shift_order(row["id"], -1)
+                    trigger_rerun()
+                if b2.button("↓", key=f"down_{row['id']}"):
+                    shift_order(row["id"], 1)
+                    trigger_rerun()
 
 conn.close()
