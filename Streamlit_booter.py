@@ -23,7 +23,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# ---------------- Git Auto-Pull restricted to IMAGE_PROCESSING_DIR ----------------
+# ---------------- Git Helpers ----------------
 REPO_DIR = config.IMAGE_PROCESSING_DIR.resolve()
 
 def run_git(args):
@@ -35,8 +35,22 @@ def run_git(args):
     )
     return result.returncode, result.stdout.strip(), result.stderr.strip()
 
-# ---------------- Git Pull Button & File Changes ----------------
-st.subheader("Repository Sync Status (Restricted)")
+def get_local_modified_files():
+    """Return a set of relative paths for locally modified/uncommitted files"""
+    code, out, err = run_git(["status", "--porcelain"])
+    modified_files = set()
+    if code == 0 and out.strip():
+        for line in out.strip().splitlines():
+            status, path = line[:2].strip(), line[3:]
+            if status in {"M", "A", "??"}:
+                modified_files.add(path.replace("\\","/"))
+    return modified_files
+
+def undo_all_changes():
+    """Reset all local changes in the repo"""
+    run_git(["reset", "--hard"])
+    run_git(["clean", "-fd"])
+    st.success("All local changes discarded ✅")
 
 def git_pull(show_files=True):
     """Pull latest changes from GitHub and optionally display changed files"""
@@ -45,9 +59,7 @@ def git_pull(show_files=True):
         st.success("Repository is up to date ✅")
         if out:
             st.info(f"Git output:\n{out}")
-
         if show_files:
-            # Show changed files
             code_files, out_files, err_files = run_git(["diff", "--name-status", "HEAD@{1}", "HEAD"])
             if code_files == 0 and out_files.strip():
                 changed = out_files.strip().splitlines()
@@ -58,18 +70,37 @@ def git_pull(show_files=True):
                     st.write(f"{status_emoji} {file_path}")
             else:
                 st.info("No files changed in this pull.")
+        return True
 
-    else:
-        st.error("Failed to pull updates ⚠️")
-        if err:
-            st.error(f"Git error:\n{err}")
-        st.warning("Resolve conflicts manually before continuing.")
+    # Pull failed — likely due to local changes
+    st.error("Failed to pull updates ⚠️")
+    if err:
+        st.error(f"Git error:\n{err}")
+    st.warning("Resolve conflicts manually before continuing.")
 
-# Button to manually trigger pull
+    # Two-step confirmation for discarding changes
+    if "confirm_uncommit" not in st.session_state:
+        if st.button("Discard All Local Changes"):
+            st.session_state.confirm_uncommit = True
+    elif st.session_state.confirm_uncommit:
+        st.warning("Are you sure? This will undo any changes you've made in this session.")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Yes, Discard Changes"):
+                undo_all_changes()
+                st.session_state.confirm_uncommit = False
+                git_pull()  # retry pull
+        with col2:
+            if st.button("Cancel"):
+                st.session_state.confirm_uncommit = False
+
+    return False
+
+# ---------------- Git Pull Button ----------------
+st.subheader("Repository Sync Status (Restricted)")
 if st.button("Pull Latest Changes"):
     git_pull()
 elif "git_synced" not in st.session_state:
-    # Optionally run a pull automatically first time per session
     git_pull()
     st.session_state.git_synced = True
 else:
@@ -82,28 +113,23 @@ Welcome to the LifeDrawingGallery UV Map Stitcher!
 
 This dashboard helps you manage the workflow from raw/cleaned images to batch creation, stitching, and gallery audit.
 """)
-
 st.markdown("---")
-
 st.subheader("Stage 0: Preprocess Raw Images (Optional)")
 st.write("""
 **Purpose:** Stage 0 is an optional preprocessing step for your raw images before ingestion.
 """)
-
 st.markdown("---")
 st.info("Select a stage from the sidebar or top menu to begin your workflow.")
 
 # ---------------- Folder Preview ----------------
 st.subheader("Cleaned Images Preview")
 CLEANED_DIR = config.CLEANED_DIR
-CLEANED_DIR.mkdir(parents=True, exist_ok=True)  # ensure folder exists
+CLEANED_DIR.mkdir(parents=True, exist_ok=True)
 
-# Collect images
 cleaned_images = sorted([
     p for p in CLEANED_DIR.iterdir()
     if p.suffix.lower() in (".png", ".jpg", ".jpeg")
 ])
-
 total_images = len(cleaned_images)
 st.write(f"**Total Images in folder:** {total_images}")
 
@@ -111,6 +137,9 @@ st.write(f"**Total Images in folder:** {total_images}")
 recent_threshold = time.time() - 7*24*60*60
 recent_images = [p for p in cleaned_images if p.stat().st_mtime >= recent_threshold]
 st.write(f"**Recently added/modified (last 7 days):** {len(recent_images)}")
+
+# Local modified/uncommitted files
+local_modified_files = get_local_modified_files()
 
 # ---------------- Thumbnail Grid ----------------
 thumb_cols = 6
@@ -131,9 +160,22 @@ else:
                 with Image.open(img_path) as im:
                     thumb = ImageOps.exif_transpose(im).convert("RGB")
                     thumb.thumbnail((thumb_size, thumb_size))
-                border_color = "#FF0000" if img_path in recent_images else "#CCCCCC"
+
+                # Determine border color
+                img_rel_path = str(img_path.relative_to(REPO_DIR)).replace("\\","/")
+                if img_path in recent_images:
+                    border_color = "#FF0000"  # recent
+                elif img_rel_path in local_modified_files:
+                    border_color = "#FFA500"  # modified/uncommitted
+                else:
+                    border_color = "#CCCCCC"  # unchanged
+
+                # Draw border
+                bordered_thumb = Image.new("RGB", (thumb_size, thumb_size), border_color)
+                bordered_thumb.paste(thumb, ((thumb_size - thumb.width)//2, (thumb_size - thumb.height)//2))
+
                 cols[c].image(
-                    thumb,
+                    bordered_thumb,
                     width=thumb_size,
                     caption=img_path.name,
                     use_column_width=False
