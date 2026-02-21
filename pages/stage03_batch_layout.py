@@ -154,42 +154,36 @@ st.subheader("Batch Preview")
 render_batch_preview(df_images.sort_values("manual_order").reset_index(drop=True))
 st.divider()
 
-# ---------- database editor ----------
-st.subheader("Edit Database Records for Selected Batch")
+# ---------- manual editing ----------
+st.subheader("Edit Manual Order / Batch Assignment (Current Batch)")
 
-# Determine allowed batches (same aspect category)
 current_aspect = df_images["aspect_category"].iloc[0]
 df_allowed_batches = df_secondary[df_secondary["aspect_ratio"] == current_aspect]
 allowed_batch_map = dict(zip(df_allowed_batches["id"], df_allowed_batches["batch_name"]))
 
-editable_df = df_images[["id", "file_path", "manual_order", "batch_id"]].copy()
+updated_rows = []
 
-# Safe batch_id mapping to prevent IndexError
-if allowed_batch_map:
-    editable_df["batch_id"] = editable_df["batch_id"].apply(
-        lambda x: x if x in allowed_batch_map else list(allowed_batch_map.keys())[0]
+for idx, row in df_images.iterrows():
+    st.write(f"**{Path(row['file_path']).name}**")
+    new_order = st.number_input(
+        "Manual Order", value=int(row["manual_order"] or 0), min_value=0, step=1, key=f"order_{row['id']}"
     )
-
-edited = st.experimental_data_editor(
-    editable_df,
-    num_rows="dynamic",
-    column_config={
-        "id": st.column_config.TextColumn("ID", disabled=True),
-        "file_path": st.column_config.TextColumn("File Path", disabled=True),
-        "manual_order": st.column_config.NumberColumn("Order"),
-        "batch_id": st.column_config.SelectboxColumn(
-            "Batch",
-            options=list(allowed_batch_map.keys()),
-            format_func=lambda x: allowed_batch_map[x],
-        ),
-    },
-)
+    new_batch = st.selectbox(
+        "Batch",
+        options=list(allowed_batch_map.keys()),
+        index=list(allowed_batch_map.keys()).index(row["batch_id"])
+        if row["batch_id"] in allowed_batch_map
+        else 0,
+        format_func=lambda x: allowed_batch_map[x],
+        key=f"batch_{row['id']}",
+    )
+    updated_rows.append((row["id"], new_order, new_batch))
 
 if st.button("Save Changes"):
-    for _, row in edited.iterrows():
+    for img_id, manual_order, batch_id in updated_rows:
         conn.execute(
             "UPDATE images SET manual_order=?, batch_id=? WHERE id=?",
-            (row["manual_order"], row["batch_id"], row["id"]),
+            (manual_order, batch_id, img_id),
         )
     conn.commit()
     st.success("Database updated!")
