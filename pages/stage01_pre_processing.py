@@ -69,6 +69,20 @@ def is_duplicate(cursor, original_hash, phash):
     return cursor.fetchone() is not None
 
 
+# ✅ NEW — check whether duplicate was already stitched before
+def already_stitched(filename, original_hash):
+    if not STITCHED_ROOT.exists():
+        return False
+
+    for f in STITCHED_ROOT.rglob("*"):
+        if not f.is_file():
+            continue
+        name = f.name
+        if filename in name or original_hash in name:
+            return True
+    return False
+
+
 # ---------------- Leftover Loader ----------------
 def collect_leftover_files():
     files = []
@@ -129,10 +143,16 @@ if st.button("Run Stage 1 Processing"):
             linked_hash = find_raw_record(cursor, path, img_hash)
             original_hash = linked_hash or img_hash
 
-            if is_duplicate(cursor, original_hash, img_phash):
-                skipped_duplicates += 1
-                progress_bar.progress((i+1)/total_raw)
-                continue
+            duplicate = is_duplicate(cursor, original_hash, img_phash)
+
+            # ✅ NEW LOGIC BLOCK
+            if duplicate:
+                if already_stitched(path.name, original_hash):
+                    skipped_duplicates += 1
+                    progress_bar.progress((i+1)/total_raw)
+                    continue
+                # else:
+                # duplicate exists but not stitched yet → allow through
 
             if not raw_record_exists(cursor, img_hash):
                 cursor.execute("""
