@@ -13,25 +13,15 @@ OUTPUT_SIZE = config.OUTPUT_SIZE
 
 st.title("Batch Layout & Manual Ordering")
 st.write(
-    "Preview layout for UV map upload. Reorder images or reassign them to a different batch (same aspect category)."
+    "Preview layout for UV map upload. Below, you can edit manual order or reassign images (same aspect category)."
 )
-
-# ---------------- Session-state rerun helper ----------------
-if "rerun_flag" not in st.session_state:
-    st.session_state["rerun_flag"] = False
-
-
-def trigger_rerun():
-    st.session_state["rerun_flag"] = not st.session_state["rerun_flag"]
-    st.stop()
-
 
 # ---------------- Verify DB ----------------
 if not DB_PATH.exists():
     st.warning(f"Database file does not exist: {DB_PATH}")
     st.stop()
 
-conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+conn = sqlite3.connect(DB_PATH)
 conn.row_factory = sqlite3.Row
 
 # ---------------- Helpers ----------------
@@ -91,9 +81,7 @@ def render_batch_preview(df_ordered, scale=0.25):
         for c in range(cols):
             if idx >= num_images:
                 break
-
             row = df_ordered.iloc[idx]
-
             try:
                 img_name = Path(row["file_path"]).name
                 img_path = CLEANED_DIR / row["aspect_category"] / img_name
@@ -123,7 +111,6 @@ def render_batch_preview(df_ordered, scale=0.25):
 
             except Exception as e:
                 st.warning(f"Failed to load image: {e}")
-
             idx += 1
 
     st.image(
@@ -131,52 +118,6 @@ def render_batch_preview(df_ordered, scale=0.25):
         caption=f"Batch {df_ordered['batch_id'].iloc[0]} Layout ({aspect})",
         width=int(OUTPUT_SIZE * scale),
     )
-
-
-def update_order(img_id, value):
-    conn.execute(
-        "UPDATE images SET manual_order=? WHERE id=?", (int(value), int(img_id))
-    )
-    conn.commit()
-
-
-def shift_order(img_id, direction):
-    cur = conn.execute(
-        "SELECT manual_order, batch_id FROM images WHERE id=?", (img_id,)
-    ).fetchone()
-    if not cur:
-        return
-
-    current_order = cur["manual_order"]
-    batch_id = cur["batch_id"]
-
-    swap = conn.execute(
-        "SELECT id, manual_order FROM images WHERE batch_id=? AND manual_order=?",
-        (batch_id, current_order + direction),
-    ).fetchone()
-
-    if swap:
-        conn.execute(
-            "UPDATE images SET manual_order=? WHERE id=?", (swap["manual_order"], img_id)
-        )
-        conn.execute(
-            "UPDATE images SET manual_order=? WHERE id=?", (current_order, swap["id"])
-        )
-        conn.commit()
-
-
-def reassign_batch(img_id, new_batch_id):
-    max_order = conn.execute(
-        "SELECT MAX(manual_order) as max_order FROM images WHERE batch_id=?",
-        (new_batch_id,),
-    ).fetchone()["max_order"]
-    new_order = 1 if max_order is None else max_order + 1
-
-    conn.execute(
-        "UPDATE images SET batch_id=?, manual_order=? WHERE id=?",
-        (new_batch_id, new_order, img_id),
-    )
-    conn.commit()
 
 
 # ---------------- Main Workflow ----------------
@@ -213,61 +154,42 @@ st.subheader("Batch Preview")
 render_batch_preview(df_images.sort_values("manual_order").reset_index(drop=True))
 st.divider()
 
-# ---------- editor ----------
-st.subheader("Reorder / Reassign Images")
-cols_per_row = 3  # number of images per row
+# ---------- database editor ----------
+st.subheader("Edit Database Records for Selected Batch")
 
-aspect_category = df_images.iloc[0]["aspect_category"]
-allowed_batches = df_secondary[df_secondary["aspect_ratio"] == aspect_category]
-batch_options = {row["id"]: row["batch_name"] for _, row in allowed_batches.iterrows()}
+# Determine allowed batches (same aspect category)
+current_aspect = df_images["aspect_category"].iloc[0]
+df_allowed_batches = df_secondary[df_secondary["aspect_ratio"] == current_aspect]
+allowed_batch_map = dict(zip(df_allowed_batches["id"], df_allowed_batches["batch_name"]))
 
-# loop over images in chunks of cols_per_row
-for i in range(0, len(df_images), cols_per_row):
-    row_images = df_images.iloc[i:i + cols_per_row]
-    cols = st.columns(len(row_images))
-    for col, (_, row) in zip(cols, row_images.iterrows()):
-        with col:
-            with st.container():  # each image + widgets in its own container
-                img_path = CLEANED_DIR / row["aspect_category"] / Path(row["file_path"]).name
-                try:
-                    st.image(img_path, use_container_width=True)
-                except:
-                    st.empty()
+editable_df = df_images[["id", "file_path", "manual_order", "batch_id"]].copy()
+editable_df["batch_id"] = editable_df["batch_id"].apply(
+    lambda x: x if x in allowed_batch_map else list(allowed_batch_map.keys())[0]
+)
 
-                # numeric order input
-                new_val = st.number_input(
-                    "Order",
-                    value=int(row["manual_order"]),
-                    step=1,
-                    key=f"order_{row['id']}",
-                    label_visibility="collapsed",
-                )
-                if new_val != row["manual_order"]:
-                    update_order(row["id"], new_val)
-                    trigger_rerun()
+edited = st.experimental_data_editor(
+    editable_df,
+    num_rows="dynamic",
+    column_config={
+        "id": st.column_config.TextColumn("ID", disabled=True),
+        "file_path": st.column_config.TextColumn("File Path", disabled=True),
+        "manual_order": st.column_config.NumberColumn("Order"),
+        "batch_id": st.column_config.SelectboxColumn(
+            "Batch",
+            options=list(allowed_batch_map.keys()),
+            format_func=lambda x: allowed_batch_map[x],
+        ),
+    },
+)
 
-                # batch reassignment dropdown
-                allowed_keys = list(batch_options.keys())
-                selected_index = allowed_keys.index(row["batch_id"]) if row["batch_id"] in allowed_keys else 0
-                new_batch = st.selectbox(
-                    "Batch",
-                    options=allowed_keys,
-                    format_func=lambda x: batch_options[x],
-                    index=selected_index,
-                    key=f"batch_{row['id']}_batch",
-                    label_visibility="collapsed",
-                )
-                if new_batch != row["batch_id"]:
-                    reassign_batch(row["id"], new_batch)
-                    trigger_rerun()
-
-                # up / down buttons
-                b1, b2 = st.columns(2)
-                if b1.button("↑", key=f"up_{row['id']}"):
-                    shift_order(row["id"], -1)
-                    trigger_rerun()
-                if b2.button("↓", key=f"down_{row['id']}"):
-                    shift_order(row["id"], 1)
-                    trigger_rerun()
+if st.button("Save Changes"):
+    for _, row in edited.iterrows():
+        conn.execute(
+            "UPDATE images SET manual_order=?, batch_id=? WHERE id=?",
+            (row["manual_order"], row["batch_id"], row["id"]),
+        )
+    conn.commit()
+    st.success("Database updated!")
+    st.experimental_rerun()
 
 conn.close()
