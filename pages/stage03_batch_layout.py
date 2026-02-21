@@ -163,9 +163,12 @@ df_allowed_batches = df_secondary[df_secondary["aspect_ratio"] == current_aspect
 allowed_batch_map = dict(zip(df_allowed_batches["id"], df_allowed_batches["batch_name"]))
 
 editable_df = df_images[["id", "file_path", "manual_order", "batch_id"]].copy()
-editable_df["batch_id"] = editable_df["batch_id"].apply(
-    lambda x: x if x in allowed_batch_map else list(allowed_batch_map.keys())[0]
-)
+
+# Safe batch_id mapping to prevent IndexError
+if allowed_batch_map:
+    editable_df["batch_id"] = editable_df["batch_id"].apply(
+        lambda x: x if x in allowed_batch_map else list(allowed_batch_map.keys())[0]
+    )
 
 edited = st.experimental_data_editor(
     editable_df,
