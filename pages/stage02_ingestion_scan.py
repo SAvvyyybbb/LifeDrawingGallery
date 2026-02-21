@@ -1,4 +1,3 @@
-# pages/stage02_ingestion_scan.py
 from pathlib import Path
 from PIL import Image
 import imagehash
@@ -7,6 +6,7 @@ import sqlite3
 from datetime import datetime
 import os
 import streamlit as st
+import pandas as pd
 import hashlib
 import config
 
@@ -101,7 +101,11 @@ def init_db(db_path: Path):
 # ---------------- Clear Batches Table ----------------
 def clear_batches_table(conn: sqlite3.Connection):
     c = conn.cursor()
+    # Delete all existing batches
     c.execute("DELETE FROM batches")
+    # Reset AUTOINCREMENT counter
+    c.execute("DELETE FROM sqlite_sequence WHERE name='batches'")
+    # Reset batch assignment in images table
     c.execute("UPDATE images SET batch_id=NULL, manual_order=NULL")
     conn.commit()
 
@@ -162,6 +166,7 @@ def process_images(input_dir: Path, conn: sqlite3.Connection, existing_files=Non
                 arr = np.array(img)
                 avg_r, avg_g, avg_b = arr[:, :, 0].mean(), arr[:, :, 1].mean(), arr[:, :, 2].mean()
 
+                # Compute both hashes
                 perceptual_hash = str(imagehash.phash(img))
                 file_hash = compute_file_hash(Path(abs_path))
 
@@ -240,22 +245,14 @@ st.title("Stage 1: Ingestion Scan")
 st.write("Scans cleaned images and creates batches for layout & UV stitching.")
 
 if st.button("Start Ingestion Scan"):
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        conn.execute("BEGIN")  # Transaction start
+    conn = sqlite3.connect(DB_PATH)
 
-        # Clear previous batches safely
-        clear_batches_table(conn)
+    # ---------------- Clear batches table BEFORE each run ----------------
+    clear_batches_table(conn)
 
-        existing_files = reconcile_db_with_moves(conn, CLEANED_DIR)
-        summary = process_images(CLEANED_DIR, conn, existing_files)
-
-        conn.commit()  # Commit all changes if successful
-    except Exception as e:
-        conn.rollback()
-        st.error(f"Ingestion scan failed: {e}")
-    finally:
-        conn.close()
+    existing_files = reconcile_db_with_moves(conn, CLEANED_DIR)
+    summary = process_images(CLEANED_DIR, conn, existing_files)
+    conn.close()
 
     st.success("Ingestion scan complete!")
     st.write(f"Total new images processed: {summary['image_count']}")
