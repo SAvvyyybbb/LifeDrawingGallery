@@ -24,7 +24,6 @@ if not DB_PATH.exists():
 conn = sqlite3.connect(DB_PATH, check_same_thread=False)
 conn.row_factory = sqlite3.Row
 
-
 # ---------------- Helpers ----------------
 def load_batches():
     df = pd.read_sql("SELECT * FROM batches ORDER BY id", conn)
@@ -157,7 +156,6 @@ def shift_order(img_id, direction):
 
 
 def reassign_batch(img_id, new_batch_id):
-    # Get current max manual_order in new batch
     max_order = conn.execute(
         "SELECT MAX(manual_order) as max_order FROM images WHERE batch_id=?",
         (new_batch_id,),
@@ -173,13 +171,11 @@ def reassign_batch(img_id, new_batch_id):
 
 # ---------------- Main Workflow ----------------
 df_batches = load_batches()
-
 if df_batches.empty:
     st.info("No batches found. Create batches first.")
     conn.close()
     st.stop()
 
-# ---------- selectors ----------
 primary_options = sorted(df_batches["primary_folder"].dropna().unique())
 selected_primary = st.selectbox("Primary Folder", primary_options)
 df_primary = df_batches[df_batches["primary_folder"] == selected_primary]
@@ -196,7 +192,6 @@ selected_batch_id = st.selectbox(
     format_func=lambda x: f"{x} — {batch_map[x]}",
 )
 
-# ---------- load images ----------
 df_images = load_images(selected_batch_id)
 if df_images.empty:
     st.info("No images in this batch.")
@@ -208,14 +203,12 @@ st.subheader("Batch Preview")
 render_batch_preview(df_images.sort_values("manual_order").reset_index(drop=True))
 st.divider()
 
-# ---------- compact editor ----------
+# ---------- editor ----------
 st.subheader("Reorder / Reassign Images")
-
 cols_per_row = 6
 rows = math.ceil(len(df_images) / cols_per_row)
 idx = 0
 
-# Precompute allowed batches per aspect_category
 aspect_category = df_images.iloc[0]["aspect_category"]
 allowed_batches = df_secondary[df_secondary["aspect_ratio"] == aspect_category]
 batch_options = {row["id"]: row["batch_name"] for _, row in allowed_batches.iterrows()}
@@ -250,11 +243,17 @@ for r in range(rows):
                 st.experimental_rerun()
 
             # ---------- batch reassignment ----------
+            allowed_keys = list(batch_options.keys())
+            if row["batch_id"] in allowed_keys:
+                selected_index = allowed_keys.index(row["batch_id"])
+            else:
+                selected_index = 0
+
             new_batch = st.selectbox(
                 "Batch",
-                options=list(batch_options.keys()),
+                options=allowed_keys,
                 format_func=lambda x: batch_options[x],
-                index=list(batch_options.keys()).index(row["batch_id"]),
+                index=selected_index,
                 key=f"batch_{row['id']}",
                 label_visibility="collapsed",
             )
@@ -267,7 +266,6 @@ for r in range(rows):
             if b1.button("↑", key=f"up_{row['id']}"):
                 shift_order(row["id"], -1)
                 st.experimental_rerun()
-
             if b2.button("↓", key=f"down_{row['id']}"):
                 shift_order(row["id"], 1)
                 st.experimental_rerun()
