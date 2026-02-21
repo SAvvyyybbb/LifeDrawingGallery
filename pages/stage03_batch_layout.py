@@ -16,6 +16,16 @@ st.write(
     "Preview layout for UV map upload. Reorder images or reassign them to a different batch (same aspect category)."
 )
 
+# ---------------- Session-state rerun helper ----------------
+if "rerun_flag" not in st.session_state:
+    st.session_state["rerun_flag"] = False
+
+
+def trigger_rerun():
+    st.session_state["rerun_flag"] = not st.session_state["rerun_flag"]
+    st.stop()
+
+
 # ---------------- Verify DB ----------------
 if not DB_PATH.exists():
     st.warning(f"Database file does not exist: {DB_PATH}")
@@ -240,14 +250,11 @@ for r in range(rows):
             )
             if new_val != row["manual_order"]:
                 update_order(row["id"], new_val)
-                st.experimental_rerun()
+                trigger_rerun()
 
             # ---------- batch reassignment ----------
             allowed_keys = list(batch_options.keys())
-            if row["batch_id"] in allowed_keys:
-                selected_index = allowed_keys.index(row["batch_id"])
-            else:
-                selected_index = 0
+            selected_index = allowed_keys.index(row["batch_id"]) if row["batch_id"] in allowed_keys else 0
 
             new_batch = st.selectbox(
                 "Batch",
@@ -259,16 +266,16 @@ for r in range(rows):
             )
             if new_batch != row["batch_id"]:
                 reassign_batch(row["id"], new_batch)
-                st.experimental_rerun()
+                trigger_rerun()
 
             # ---------- up / down ----------
             b1, b2 = st.columns(2)
             if b1.button("↑", key=f"up_{row['id']}"):
                 shift_order(row["id"], -1)
-                st.experimental_rerun()
+                trigger_rerun()
             if b2.button("↓", key=f"down_{row['id']}"):
                 shift_order(row["id"], 1)
-                st.experimental_rerun()
+                trigger_rerun()
 
         idx += 1
 
