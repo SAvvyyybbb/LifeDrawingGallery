@@ -1,3 +1,4 @@
+# pages/stage03_uv_stitching.py
 import streamlit as st
 import os
 import shutil
@@ -251,18 +252,18 @@ if st.button("Export + Sort Source Images"):
             # ---- Mark images.is_stitched = 1 ----
             conn.execute(
                 "UPDATE images SET is_stitched=1 WHERE hash=?",
-                (h256,)
+                (row["original_hash"] if "original_hash" in row else row["hash"],)
             )
 
             # ---- Mark raw_image_data.batched = 1 via processed_image_data lookup ----
             conn.execute("""
-            UPDATE raw_image_data
-            SET batched=1
-            WHERE COALESCE(modified_hash, hash) IN (
-                SELECT p.original_hash
-                FROM processed_image_data p
-                WHERE p.hash=?
-            )
+                UPDATE raw_image_data
+                SET batched=1
+                WHERE COALESCE(modified_hash, hash) IN (
+                    SELECT p.original_hash
+                    FROM processed_image_data p
+                    WHERE p.hash=?
+                )
             """,(h256,))
 
     # ---- Leftovers ----
