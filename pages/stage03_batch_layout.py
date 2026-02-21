@@ -215,32 +215,25 @@ st.divider()
 
 # ---------- editor ----------
 st.subheader("Reorder / Reassign Images")
-cols_per_row = 6
-rows = math.ceil(len(df_images) / cols_per_row)
-idx = 0
+cols_per_row = 3  # number of images per row
 
 aspect_category = df_images.iloc[0]["aspect_category"]
 allowed_batches = df_secondary[df_secondary["aspect_ratio"] == aspect_category]
 batch_options = {row["id"]: row["batch_name"] for _, row in allowed_batches.iterrows()}
 
-for r in range(rows):
-    cols = st.columns(cols_per_row)
-
-    for c in range(cols_per_row):
-        if idx >= len(df_images):
-            break
-
-        row = df_images.iloc[idx]
-        with cols[c]:
-            img_name = Path(row["file_path"]).name
-            img_path = CLEANED_DIR / row["aspect_category"] / img_name
-
+# loop over images in chunks of cols_per_row
+for i in range(0, len(df_images), cols_per_row):
+    row_images = df_images.iloc[i:i + cols_per_row]
+    cols = st.columns(len(row_images))
+    for col, (_, row) in zip(cols, row_images.iterrows()):
+        with col:
+            img_path = CLEANED_DIR / row["aspect_category"] / Path(row["file_path"]).name
             try:
                 st.image(img_path, use_container_width=True)
             except:
                 st.empty()
 
-            # ---------- numeric order ----------
+            # numeric order input
             new_val = st.number_input(
                 "Order",
                 value=int(row["manual_order"]),
@@ -252,7 +245,7 @@ for r in range(rows):
                 update_order(row["id"], new_val)
                 trigger_rerun()
 
-            # ---------- batch reassignment ----------
+            # batch reassignment dropdown
             allowed_keys = list(batch_options.keys())
             selected_index = allowed_keys.index(row["batch_id"]) if row["batch_id"] in allowed_keys else 0
 
@@ -268,7 +261,7 @@ for r in range(rows):
                 reassign_batch(row["id"], new_batch)
                 trigger_rerun()
 
-            # ---------- up / down ----------
+            # up / down buttons
             b1, b2 = st.columns(2)
             if b1.button("↑", key=f"up_{row['id']}"):
                 shift_order(row["id"], -1)
@@ -276,7 +269,5 @@ for r in range(rows):
             if b2.button("↓", key=f"down_{row['id']}"):
                 shift_order(row["id"], 1)
                 trigger_rerun()
-
-        idx += 1
 
 conn.close()
