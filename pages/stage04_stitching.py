@@ -1,5 +1,3 @@
-# pages/stage04_stitching.py
-
 import streamlit as st
 import os
 import shutil
@@ -256,17 +254,16 @@ if st.button("Export + Sort Source Images"):
                 (h256,)
             )
 
-            # ---- Mark raw_image_data.batched = 1 using modified_hash ----
+            # ---- Mark raw_image_data.batched = 1 via processed_image_data lookup ----
             conn.execute("""
             UPDATE raw_image_data
-            SET batched = 1
-            WHERE hash IN (
-                SELECT COALESCE(r.modified_hash, r.hash)
-                FROM raw_image_data r
-                JOIN stitched_phashes s ON COALESCE(r.modified_hash, r.hash) = s.hash
-                WHERE s.hash = ?
+            SET batched=1
+            WHERE COALESCE(modified_hash, hash) IN (
+                SELECT p.original_hash
+                FROM processed_image_data p
+                WHERE p.hash=?
             )
-            """, (h256,))
+            """,(h256,))
 
     # ---- Leftovers ----
     leftovers = df_images[~df_images["id"].isin(stitched_image_ids)]
