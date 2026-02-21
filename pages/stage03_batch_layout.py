@@ -10,10 +10,11 @@ import config
 CLEANED_DIR = config.CLEANED_DIR
 DB_PATH = config.DB_PATH
 OUTPUT_SIZE = config.OUTPUT_SIZE
+THUMB_SIZE = 64  # thumbnail size for inline editor
 
 st.title("Batch Layout & Manual Ordering")
 st.write(
-    "Preview layout for UV map upload. Below, edit manual order and reassign images (same aspect category) inline."
+    "Preview layout for UV map upload. Edit manual order and reassign images (same aspect category) inline. Thumbnails help identify images."
 )
 
 # ---------------- Verify DB ----------------
@@ -164,10 +165,21 @@ allowed_batch_map = dict(zip(df_allowed_batches["id"], df_allowed_batches["batch
 updated_rows = []
 
 for idx, row in df_images.iterrows():
-    col1, col2, col3 = st.columns([1, 2, 2])
-    with col1:
-        st.write(f"Order: {row['manual_order']}")
-    with col2:
+    col_thumb, col_order, col_batch = st.columns([1, 2, 2])
+
+    # thumbnail
+    with col_thumb:
+        try:
+            img_name = Path(row["file_path"]).name
+            img_path = CLEANED_DIR / row["aspect_category"] / img_name
+            thumb = Image.open(img_path).convert("RGB")
+            thumb.thumbnail((THUMB_SIZE, THUMB_SIZE))
+            st.image(thumb)
+        except:
+            st.write("-")
+
+    # manual order input
+    with col_order:
         new_order = st.number_input(
             "",
             value=int(row["manual_order"] or 0),
@@ -175,7 +187,9 @@ for idx, row in df_images.iterrows():
             step=1,
             key=f"order_{row['id']}",
         )
-    with col3:
+
+    # batch selection (same aspect)
+    with col_batch:
         new_batch = st.selectbox(
             "",
             options=list(allowed_batch_map.keys()),
