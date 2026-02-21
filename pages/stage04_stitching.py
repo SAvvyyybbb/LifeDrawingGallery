@@ -6,6 +6,7 @@ from PIL import Image
 import pandas as pd
 import sqlite3
 import imagehash
+import hashlib
 import config
 from pathlib import Path
 
@@ -23,6 +24,7 @@ conn.execute("""
 CREATE TABLE IF NOT EXISTS stitched_phashes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     phash TEXT NOT NULL,
+    hash TEXT NOT NULL,
     file_path TEXT NOT NULL,
     batch_id INTEGER,
     stitched_date TEXT
@@ -52,14 +54,15 @@ if not df_images.empty:
 else:
     SOURCE_ROOT = config.IMAGE_PROCESSING_DIR.resolve()
 
-# ---------------- Naming Convention ----------------
+# ---------------- Naming & Grid ----------------
 ASPECT_CODES = config.ASPECT_CODES
 ROOM_CODES = config.ROOM_CODES
 DEFAULT_POSITION = config.DEFAULT_POSITION
 
-# ---------------- Capacity Logic ----------------
 def grid_for_aspect(aspect):
-    return {"Square": (4,4),"Portrait": (4,2),"Extra Tall": (4,2),"Landscape": (2,4),"Extra Wide": (2,4)}.get(aspect,(0,0))
+    return {"Square": (4,4),"Portrait": (4,2),"Extra Tall": (4,2),
+            "Landscape": (2,4),"Extra Wide": (2,4)}.get(aspect,(0,0))
+
 def capacity_for_aspect(aspect):
     c,r = grid_for_aspect(aspect)
     return c*r
@@ -73,9 +76,8 @@ for _, batch in df_batches.iterrows():
     aspects = imgs["aspect_category"].dropna().unique()
     if len(aspects) != 1:
         continue
-    if len(imgs) >= capacity_for_aspect(aspects[0]):
-        if batch["status"] != "complete":
-            updated.append(batch["id"])
+    if len(imgs) >= capacity_for_aspect(aspects[0]) and batch["status"] != "complete":
+        updated.append(batch["id"])
 if updated:
     conn.executemany("UPDATE batches SET status = 'complete' WHERE id = ?", [(i,) for i in updated])
     conn.commit()
@@ -84,17 +86,6 @@ if updated:
 # ---------------- Session State ----------------
 if "selected_batches" not in st.session_state:
     st.session_state.selected_batches = set()
-
-# ---------------- Summary: Complete Batches by Aspect ----------------
-complete_batches = df_batches[df_batches["status"] == "complete"]
-if not complete_batches.empty:
-    merged = pd.merge(complete_batches, df_images[['batch_id','aspect_category']], left_on='id', right_on='batch_id', how='left')
-    aspect_counts = merged.groupby('aspect_category')['id'].nunique()
-    st.subheader("Complete Batches by Aspect")
-    for aspect, count in aspect_counts.items():
-        st.write(f"**{aspect or 'Unknown'}:** {count} batch(es)")
-else:
-    st.info("No complete batches yet.")
 
 # ---------------- Preview Renderer ----------------
 def render_batch_preview(batch_id, batch_imgs):
@@ -121,6 +112,9 @@ def render_batch_preview(batch_id, batch_imgs):
 # ---------------- Helpers ----------------
 def compute_phash(path):
     return str(imagehash.phash(Image.open(path)))
+
+def compute_file_hash(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 def relative_preserve(src_path: str) -> str:
     src_path = Path(src_path).resolve()
@@ -164,6 +158,12 @@ def batch_selector_ui_grid(df, cols_per_row=3):
             if imgs.empty:
                 continue
 
+            # Check if any image in this batch is vetoed
+            vetoed_imgs = imgs[imgs["veto_ind"]==1]
+            if not vetoed_imgs.empty:
+                st.warning(f"Batch {batch['batch_name']} contains {len(vetoed_imgs)} vetoed image(s)")
+
+            # Session keys
             key_chk = f"batch_chk_{bid}"
             key_aspect = f"batch_aspect_{bid}"
             key_room = f"batch_room_{bid}"
@@ -200,131 +200,94 @@ batch_selector_ui_grid(df_batches[df_batches["status"] != "complete"])
 
 selected_batches = sorted(st.session_state.selected_batches)
 
-# ---------------- Export Buttons ----------------
+# ---------------- Export + Sort Source Images ----------------
 st.divider()
 
-# ---------- Export Selected UV Maps ----------
-if st.button("Export Selected Batches as UV Maps"):
-    uv_names = []
-    duplicate_names = []
-    for bid in selected_batches:
-        aspect_code = st.session_state.get(f"batch_aspect_{bid}", "XX")
-        room_code   = st.session_state.get(f"batch_room_{bid}", "MG")
-        position    = st.session_state.get(f"batch_pos_{bid}", DEFAULT_POSITION)
-        uv_name = f"{aspect_code}{room_code}{position}"
-        if uv_name in uv_names:
-            duplicate_names.append(uv_name)
-        else:
-            uv_names.append(uv_name)
-
-    if duplicate_names:
-        st.error(f"Duplicate UV names detected: {', '.join(duplicate_names)}. Adjust Aspect/Room/Position before exporting.")
-    else:
-        export_stitched_batches(selected_batches)
-        st.success("UV Maps exported with custom names.")
-
-# ---------- Export + Sort Source Images ----------
 if st.button("Export + Sort Source Images"):
-    uv_names = []
-    duplicate_names = []
+    today = datetime.now().strftime("%Y_%m_%d")
+    stitched_root = config.STITCHED_DIR / f"3_Stitched_{today}"
+    leftover_root = config.STITCHED_DIR / f"Leftovers_{today}"
+    stitched_root.mkdir(parents=True, exist_ok=True)
+    leftover_root.mkdir(parents=True, exist_ok=True)
+
+    export_stitched_batches(selected_batches, output_dir=stitched_root)
+
+    stitched_image_ids = set()
+    dupes = []
+
+    existing_hashes = pd.read_sql("SELECT phash,hash,batch_id FROM stitched_phashes",conn)
+
     for bid in selected_batches:
-        aspect_code = st.session_state.get(f"batch_aspect_{bid}", "XX")
-        room_code   = st.session_state.get(f"batch_room_{bid}", "MG")
-        position    = st.session_state.get(f"batch_pos_{bid}", DEFAULT_POSITION)
-        uv_name = f"{aspect_code}{room_code}{position}"
-        if uv_name in uv_names:
-            duplicate_names.append(uv_name)
-        else:
-            uv_names.append(uv_name)
-
-    if duplicate_names:
-        st.error(f"Duplicate UV names detected: {', '.join(duplicate_names)}. Adjust Aspect/Room/Position before exporting.")
-    else:
-        today = datetime.now().strftime("%Y_%m_%d")
-        stitched_root = config.STITCHED_DIR / f"3_Stitched_{today}"
-        leftover_root = config.STITCHED_DIR / f"Leftovers_{today}"
-        stitched_root.mkdir(parents=True, exist_ok=True)
-        leftover_root.mkdir(parents=True, exist_ok=True)
-
-        # ---- Export Stitched Batches ----
-        export_stitched_batches(selected_batches, output_dir=stitched_root)
-
-        stitched_image_ids = set()
-        dupes = []
-        existing_hashes = pd.read_sql("SELECT phash,batch_id FROM stitched_phashes",conn)
-
-        for bid in selected_batches:
-            imgs = df_images[df_images["batch_id"]==bid]
-            for _, row in imgs.iterrows():
-                src = Path(row["file_path"]).resolve()
-                if not src.exists():
-                    continue
-                rel = relative_preserve(src)
-                dst = stitched_root / rel
-                dst.parent.mkdir(parents=True, exist_ok=True)
-                shutil.move(str(src), str(dst))
-                ph = compute_phash(dst)
-                stitched_image_ids.add(row["id"])
-
-                match = existing_hashes[existing_hashes["phash"]==ph]
-                if not match.empty:
-                    dupes.append((str(dst), match.iloc[0]["batch_id"]))
-
-                conn.execute(
-                    "INSERT INTO stitched_phashes (phash,file_path,batch_id,stitched_date) VALUES (?,?,?,?)",
-                    (ph,str(dst),bid,today)
-                )
-                conn.execute(
-                    "INSERT INTO export_moves (image_id,src_path,dst_path,export_type,export_date) VALUES (?,?,?,?,?)",
-                    (row["id"],str(src),str(dst),'stitched',today)
-                )
-
-        # ---- Leftovers ----
-        leftovers = df_images[~df_images["id"].isin(stitched_image_ids)]
-        for _, row in leftovers.iterrows():
+        imgs = df_images[df_images["batch_id"]==bid]
+        for _, row in imgs.iterrows():
             src = Path(row["file_path"]).resolve()
             if not src.exists():
                 continue
             rel = relative_preserve(src)
-            dst = leftover_root / rel
+            dst = stitched_root / rel
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(src), str(dst))
+
+            ph = compute_phash(dst)
+            h256 = compute_file_hash(dst)
+            stitched_image_ids.add(row["id"])
+
+            match = existing_hashes[existing_hashes["hash"]==h256]
+            if not match.empty:
+                dupes.append((str(dst), match.iloc[0]["batch_id"]))
+
+            # ---- INSERT into stitched_phashes ----
             conn.execute(
-                "INSERT INTO export_moves (image_id,src_path,dst_path,export_type,export_date) VALUES (?,?,?,?,?)",
-                (row["id"],str(src),str(dst),'leftover',today)
+                "INSERT INTO stitched_phashes (phash,hash,file_path,batch_id,stitched_date) VALUES (?,?,?,?,?)",
+                (ph,h256,str(dst),bid,today)
             )
 
-        conn.commit()
+            # ---- INSERT into export_moves ----
+            conn.execute(
+                "INSERT INTO export_moves (image_id,src_path,dst_path,export_type,export_date) VALUES (?,?,?,?,?)",
+                (row["id"],str(src),str(dst),'stitched',today)
+            )
 
-        if dupes:
-            st.warning("Duplicates detected:")
-            for d,b in dupes:
-                st.write(f"{d} (matches batch {b})")
-        else:
-            st.success("Export + Sort completed successfully.")
+            # ---- Mark images.is_stitched = 1 ----
+            conn.execute(
+                "UPDATE images SET is_stitched=1 WHERE hash=?",
+                (h256,)
+            )
 
-# ---- Back-out Last Export ----
-st.divider()
-if st.button("Back-out Last Export (Restore Source Images)"):
-    last_export = conn.execute("SELECT MAX(export_date) FROM export_moves").fetchone()[0]
-    if not last_export:
-        st.warning("No export found to back out.")
-    else:
-        moves = pd.read_sql(
-            "SELECT * FROM export_moves WHERE export_date=? ORDER BY id DESC", conn, params=(last_export,)
+            # ---- Mark raw_image_data.batched = 1 via processed_image_data join ----
+            conn.execute("""
+            UPDATE raw_image_data
+            SET batched=1
+            WHERE hash IN (
+                SELECT COALESCE(p.modified_hash, p.original_hash)
+                FROM processed_image_data p
+                JOIN stitched_phashes s ON COALESCE(p.modified_hash, p.original_hash) = s.hash
+                WHERE s.hash=?
+            )
+            """,(h256,))
+
+    # ---- Leftovers ----
+    leftovers = df_images[~df_images["id"].isin(stitched_image_ids)]
+    for _, row in leftovers.iterrows():
+        src = Path(row["file_path"]).resolve()
+        if not src.exists():
+            continue
+        rel = relative_preserve(src)
+        dst = leftover_root / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(src), str(dst))
+        conn.execute(
+            "INSERT INTO export_moves (image_id,src_path,dst_path,export_type,export_date) VALUES (?,?,?,?,?)",
+            (row["id"],str(src),str(dst),'leftover',today)
         )
-        restored = 0
-        for _, m in moves.iterrows():
-            dst_path = Path(m["dst_path"])
-            if not dst_path.exists():
-                continue
-            src_path = Path(m["src_path"])
-            src_path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(dst_path), str(src_path))
-            restored += 1
-        conn.execute("DELETE FROM stitched_phashes WHERE stitched_date=?", (last_export,))
-        conn.execute("DELETE FROM export_moves WHERE export_date=?", (last_export,))
-        conn.commit()
-        st.success(f"Back-out complete. Restored {restored} images from export {last_export}.")
+
+    conn.commit()
+
+    if dupes:
+        st.warning("Duplicates detected:")
+        for d,b in dupes:
+            st.write(f"{d} (matches batch {b})")
+    else:
+        st.success("Export + Sort completed successfully.")
 
 conn.close()
