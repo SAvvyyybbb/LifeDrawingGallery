@@ -104,8 +104,21 @@ def clean_source(path: Path, processed_dirs, leftovers_dirs):
     return False
 
 # ---------------- UI ----------------
-st.title("Stage 1: Preprocess Raw Images")
+st.title("Preprocess Raw Images")
 include_leftovers = st.toggle("Reintroduce leftover images from previous batches", value=False)
+
+st.markdown("---")
+st.info("How to use this page.")
+
+st.write("""
+
+This page holds the button that runs a process which cleans and turns your raw images into a 512 by 512 pixel artworks (or any other aspect ratio that we use) and assigns new metadata. 
+
+Note that if you leave the toggle on, you can reintroduce images collected in the last gallery update that didn't make it to the board. If you just want images that are new, leave this toggle off.
+
+When you are ready. Click run process.
+
+""")
 
 if not RAW_DIR.exists():
     st.warning(f"No raw directory found: {RAW_DIR}")

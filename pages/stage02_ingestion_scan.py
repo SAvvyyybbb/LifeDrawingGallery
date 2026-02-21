@@ -241,8 +241,8 @@ init_conn = init_db(DB_PATH)
 init_conn.close()
 
 # ---------------- Streamlit UI ----------------
-st.title("Stage 1: Ingestion Scan")
-st.write("Scans cleaned images and creates batches for layout & UV stitching.")
+st.title("Ingestion Scan")
+st.write("Loads images that have been processed and assigns them to a batch. Before running this process ensure you have prepared generalized groupings for paintings. Running this more than once will recalibrate to default colour weightings sort orders.")
 
 if st.button("Start Ingestion Scan"):
     conn = sqlite3.connect(DB_PATH)

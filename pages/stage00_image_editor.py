@@ -16,7 +16,26 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("LifeDrawingGallery — Image Crop & Rotate")
+st.title("Image Crop & Rotate")
+
+st.markdown("---")
+st.info("How to use this page.")
+
+st.write("""
+
+This page reads the current contents that have been downloaded from Discord in its source formatting. 
+
+The user (you) will need to check the images within, and use the rotate and crop tools to format these to be stretched into the right resolution in a later stage. You can also change the crop of an image if you want.
+For artworks taken without using the screenshot function (the artist took a photo of their work floating in the world), crop the image down to exclude the backgrounds using the tools provided. 
+If the artwork was uploaded with the screenshot (and theres a black border) that's perfect, you can leave it as is to be cleaned automatically.
+
+When editing an image:
+
+You can find a dropdown to select a preset aspect ratio to size around the image, this will ensure the cleaned up image will fit the UV map without too much stretching. You can use the rotate tool to help find the best fit.
+
+Note that the outer edge of the red box defines the crop. So anything under, or inside the red line is included in the frame. The preview below should show you what the output looks like.
+
+""")
 
 # ---------------- Database ----------------
 DB_PATH = config.DB_DIR / "image_data.db"

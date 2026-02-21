@@ -88,7 +88,45 @@ if empty_folders:
             st.warning("Folder not empty or cannot delete")
 
 # ---------------- Main Panel ----------------
-st.title("Cleaned Folder Manager")
+st.title("Artwork Category Group Manager")
+
+include_leftovers = st.toggle("Reintroduce leftover images from previous batches", value=False)
+
+st.markdown("---")
+st.info("How to use this page.")
+
+st.write("""
+
+This page shows you each image after it has been cleaned, it has also been automatically grouped by aspect ratio because in the final UV,  you can not mix square with rectangle artworks on the same UV.
+
+Your goal is to set up categories for artworks. Create folders and assemble groups of artworks in multiples of 16 (for square) or 8 (for any other aspect ratio), in order to compose a "finished" batch.
+
+""")
+st.markdown("---")
+st.info("Navigation")
+
+st.write("""
+
+If you look to the left, there will be tools to navigate through and create new folders, change the dropdown to ./ and click "Go Up" escape one layer of the onion. Click the dropdown named Square to enter that layer.
+
+An example of the structure may look like this: 
+
+    Square
+        Abstract
+        Nature
+        Artist
+    Landscape
+        Artist
+    Portrait
+    Extra Wide
+    Extra Tall
+
+If you are viewing the Abstract folder, you will need to exit to the Square layer before the Landscape and Portrait folders appear.
+
+
+""")
+st.markdown("---")
+
 st.caption(f"📁 {st.session_state.current_folder.relative_to(ROOT_DIR)}")
 
 # ---------------- Fetch images ----------------
@@ -123,6 +161,7 @@ for r in range(rows):
 # ---------------- Move Selected Images ----------------
 st.markdown("---")
 st.subheader("Move Selected Images")
+st.info("Move selected items to another folder with the same aspect ratio.")
 
 if st.session_state.images_to_move:
     # Determine top-level aspect folder (first part relative to CLEANED_DIR)
@@ -154,7 +193,7 @@ else:
 # ---------------- Delete Selected Images ----------------
 st.markdown("---")
 st.subheader("Delete Selected Images")
-
+st.info("Delete selected items. If you deleted something incorrect, call Savvb.")
 if st.session_state.images_to_move:
     if st.button("Delete Images"):
         delete_images(st.session_state.images_to_move)
