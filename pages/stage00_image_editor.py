@@ -23,9 +23,22 @@ DB_PATH = config.DB_DIR / "image_data.db"
 
 # ---------------- Schema Guard ----------------
 def ensure_schema():
+    """Ensure raw_image_data exists and has all required columns."""
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
 
+    # 1️⃣ Create raw_image_data if missing
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS raw_image_data (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        file_name TEXT NOT NULL,
+        file_path TEXT NOT NULL,
+        hash TEXT NOT NULL,
+        veto_ind INTEGER DEFAULT 0
+    )
+    """)
+
+    # 2️⃣ Ensure required columns exist
     cur.execute("PRAGMA table_info(raw_image_data)")
     cols = [c[1] for c in cur.fetchall()]
 
@@ -35,6 +48,8 @@ def ensure_schema():
         cur.execute("ALTER TABLE raw_image_data ADD COLUMN updated_at TEXT")
     if "processing" not in cols:
         cur.execute("ALTER TABLE raw_image_data ADD COLUMN processing INTEGER DEFAULT 0")
+    if "batched" not in cols:
+        cur.execute("ALTER TABLE raw_image_data ADD COLUMN batched INTEGER DEFAULT 0")
 
     conn.commit()
     conn.close()
@@ -47,10 +62,7 @@ def sha256_file(path: Path) -> str:
 
 # ---------------- DB Update Logic ----------------
 def update_modified_hash_by_hash(original_hash, modified_hash):
-    """
-    Update the modified_hash based on the original hash.
-    Only updates the existing raw record.
-    """
+    """Update the modified_hash and reset processing flag for an existing raw record."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
@@ -172,16 +184,10 @@ def classify_aspect(img):
 # ---------------- Save Logic ----------------
 def save_edit(move_next=False):
     try:
-        # Compute the original hash before saving
         original_hash = sha256_file(current_image_path)
-
-        # Save edited image
         cropped_img.save(current_image_path)
         new_hash = sha256_file(current_image_path)
-
-        # Update database record using original hash
         updated = update_modified_hash_by_hash(original_hash, new_hash)
-
         category = classify_aspect(cropped_img)
 
         if updated == 0:
@@ -189,7 +195,6 @@ def save_edit(move_next=False):
         else:
             st.success(f"Saved — Category: {category}")
 
-        # Move to next
         if move_next:
             if st.session_state.selected < len(all_images)-1:
                 st.session_state.selected += 1
