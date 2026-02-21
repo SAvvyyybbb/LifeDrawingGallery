@@ -7,6 +7,7 @@ from datetime import datetime
 import os
 import streamlit as st
 import pandas as pd
+import hashlib
 import config
 
 OUTPUT_SIZE = 2048
@@ -14,7 +15,6 @@ OUTPUT_SIZE = 2048
 # ---------------- Config ----------------
 CLEANED_DIR = config.CLEANED_DIR
 DB_PATH = config.DB_PATH
-
 
 # ---------------- Helpers ----------------
 def compute_aspect_category(w, h):
@@ -30,34 +30,31 @@ def compute_aspect_category(w, h):
     else:
         return "Extra Wide"
 
-
 def compute_tile_size(category, w, h):
     if category == "Square":
         tiles = 4
         tile_w = OUTPUT_SIZE // tiles
         tile_h = OUTPUT_SIZE // tiles
         batch_capacity = tiles * tiles
-
     elif category in ["Landscape", "Extra Wide"]:
         tile_h = OUTPUT_SIZE // 4
         tile_w = w
         cols = OUTPUT_SIZE // tile_w
         rows = OUTPUT_SIZE // tile_h
         batch_capacity = max(1, cols * rows)
-
     elif category in ["Portrait", "Extra Tall"]:
         tile_w = OUTPUT_SIZE // 4
         tile_h = h
         cols = OUTPUT_SIZE // tile_w
         rows = OUTPUT_SIZE // tile_h
         batch_capacity = max(1, cols * rows)
-
     else:
         tile_w, tile_h = w, h
         batch_capacity = 1
-
     return tile_w, tile_h, batch_capacity
 
+def compute_file_hash(file_path: Path):
+    return hashlib.sha256(file_path.read_bytes()).hexdigest()
 
 # ---------------- Database Initialization ----------------
 def init_db(db_path: Path):
@@ -92,7 +89,8 @@ def init_db(db_path: Path):
         avg_r REAL,
         avg_g REAL,
         avg_b REAL,
-        phash TEXT,
+        perceptual_hash TEXT,
+        hash TEXT,
         FOREIGN KEY(batch_id) REFERENCES batches(id)
     )
     """)
@@ -100,11 +98,9 @@ def init_db(db_path: Path):
     conn.commit()
     return conn
 
-
 # ---------------- Smart Reconciliation ----------------
 def reconcile_db_with_moves(conn: sqlite3.Connection, input_dir: Path):
     c = conn.cursor()
-
     c.execute("SELECT id, file_path, batch_id FROM images")
     db_rows = c.fetchall()
 
@@ -112,37 +108,23 @@ def reconcile_db_with_moves(conn: sqlite3.Connection, input_dir: Path):
     disk_map = {f.name: f for f in disk_files}
 
     existing_files = set()
-
     for row_id, file_path, batch_id in db_rows:
         old_path = Path(file_path)
         fname = old_path.name
-
         if fname in disk_map:
             new_path = disk_map[fname]
-
             if old_path.parent != new_path.parent:
-                c.execute(
-                    "UPDATE images SET file_path=?, batch_id=NULL WHERE id=?",
-                    (str(new_path), row_id)
-                )
+                c.execute("UPDATE images SET file_path=?, batch_id=NULL WHERE id=?", (str(new_path), row_id))
             else:
-                c.execute(
-                    "UPDATE images SET file_path=? WHERE id=?",
-                    (str(new_path), row_id)
-                )
-
+                c.execute("UPDATE images SET file_path=? WHERE id=?", (str(new_path), row_id))
             existing_files.add(str(new_path))
-
         else:
             c.execute("DELETE FROM images WHERE id=?", (row_id,))
-
     conn.commit()
     return existing_files
 
-
 # ---------------- Image Processing ----------------
 def process_images(input_dir: Path, conn: sqlite3.Connection, existing_files=None):
-
     if existing_files is None:
         existing_files = set()
 
@@ -151,7 +133,6 @@ def process_images(input_dir: Path, conn: sqlite3.Connection, existing_files=Non
     validation_issues = []
 
     for root, _, files in os.walk(input_dir):
-
         imgs = [f for f in files if f.lower().endswith((".png", ".jpg", ".jpeg"))]
         if not imgs:
             continue
@@ -162,13 +143,10 @@ def process_images(input_dir: Path, conn: sqlite3.Connection, existing_files=Non
         secondary_folder = parts[1] if len(parts) > 1 else None
 
         img_metadata, aspect_set = [], set()
-
         for f in imgs:
             abs_path = str((Path(root) / f).resolve())
-
             if abs_path in existing_files:
                 continue
-
             try:
                 img = Image.open(abs_path).convert("RGB")
                 w, h = img.size
@@ -177,7 +155,9 @@ def process_images(input_dir: Path, conn: sqlite3.Connection, existing_files=Non
                 arr = np.array(img)
                 avg_r, avg_g, avg_b = arr[:, :, 0].mean(), arr[:, :, 1].mean(), arr[:, :, 2].mean()
 
-                p_hash = str(imagehash.phash(img))
+                # Compute both hashes
+                perceptual_hash = str(imagehash.phash(img))
+                file_hash = compute_file_hash(Path(abs_path))
 
                 img_metadata.append({
                     "file_path": abs_path,
@@ -187,16 +167,17 @@ def process_images(input_dir: Path, conn: sqlite3.Connection, existing_files=Non
                     "avg_r": avg_r,
                     "avg_g": avg_g,
                     "avg_b": avg_b,
-                    "phash": p_hash
+                    "perceptual_hash": perceptual_hash,
+                    "hash": file_hash
                 })
 
                 aspect_set.add(category)
 
                 c.execute("""
                     INSERT OR IGNORE INTO images
-                    (file_path, aspect_category, img_w, img_h, avg_r, avg_g, avg_b, phash)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """, (abs_path, category, w, h, avg_r, avg_g, avg_b, p_hash))
+                    (file_path, aspect_category, img_w, img_h, avg_r, avg_g, avg_b, perceptual_hash, hash)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (abs_path, category, w, h, avg_r, avg_g, avg_b, perceptual_hash, file_hash))
 
                 image_count += 1
 
@@ -215,14 +196,9 @@ def process_images(input_dir: Path, conn: sqlite3.Connection, existing_files=Non
         sorted_images = [img_metadata[i] for i in sorted_indices]
 
         sample_data = sorted_images[0]
-        tile_w, tile_h, batch_capacity = compute_tile_size(
-            sample_data['category'],
-            sample_data['w'],
-            sample_data['h']
-        )
+        tile_w, tile_h, batch_capacity = compute_tile_size(sample_data['category'], sample_data['w'], sample_data['h'])
 
         for i in range(0, len(sorted_images), batch_capacity):
-
             batch_imgs = sorted_images[i:i + batch_capacity]
             ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             batch_name = f"Batch-{primary_folder}-{batch_count+1}"
@@ -243,103 +219,30 @@ def process_images(input_dir: Path, conn: sqlite3.Connection, existing_files=Non
                 )
 
     conn.commit()
-
     return {
         "image_count": image_count,
         "batch_count": batch_count,
         "validation_issues": validation_issues
     }
 
-
 # ---------------- Ensure DB exists BEFORE UI ----------------
 init_conn = init_db(DB_PATH)
 init_conn.close()
-
 
 # ---------------- Streamlit UI ----------------
 st.title("Stage 1: Ingestion Scan")
 st.write("Scans cleaned images and creates batches for layout & UV stitching.")
 
-
 if st.button("Start Ingestion Scan"):
-
     conn = sqlite3.connect(DB_PATH)
-
     existing_files = reconcile_db_with_moves(conn, CLEANED_DIR)
     summary = process_images(CLEANED_DIR, conn, existing_files)
-
     conn.close()
 
     st.success("Ingestion scan complete!")
     st.write(f"Total new images processed: {summary['image_count']}")
     st.write(f"Total batches created: {summary['batch_count']}")
-
     if summary["validation_issues"]:
         st.warning("Some folders contained mixed aspect ratios:")
         for folder, categories in summary["validation_issues"]:
             st.write(f" - {folder}: {categories}")
-
-
-# ---------------- Database Audit Panel ----------------
-with st.expander("📊 Audit Current Image Database", expanded=False):
-
-    conn = sqlite3.connect(DB_PATH)
-
-    try:
-        images_df = pd.read_sql_query("SELECT * FROM images", conn)
-        batches_df = pd.read_sql_query("SELECT * FROM batches", conn)
-    except Exception:
-        images_df = pd.DataFrame()
-        batches_df = pd.DataFrame()
-
-    st.write(f"Total images in DB: {len(images_df)}")
-    st.write(f"Total batches in DB: {len(batches_df)}")
-
-    if st.button("🗑️ Clear Current Cache"):
-        c = conn.cursor()
-        c.execute("DELETE FROM images")
-        c.execute("DELETE FROM batches")
-        conn.commit()
-        st.warning("Database cache cleared!")
-        images_df = pd.DataFrame()
-        batches_df = pd.DataFrame()
-
-    batch_options = ["All"] + batches_df["batch_name"].tolist() if not batches_df.empty else ["All"]
-    selected_batch = st.selectbox("Filter by batch", options=batch_options)
-
-    if selected_batch != "All" and not batches_df.empty:
-        batch_id = batches_df.loc[batches_df["batch_name"] == selected_batch, "id"].values[0]
-        images_df = images_df[images_df["batch_id"] == batch_id]
-
-    if not images_df.empty:
-
-        display_df = images_df[[
-            "file_path",
-            "aspect_category",
-            "img_w",
-            "img_h",
-            "avg_r",
-            "avg_g",
-            "avg_b",
-            "batch_id",
-            "manual_order"
-        ]].copy()
-
-        display_df.rename(columns={
-            "file_path": "File",
-            "aspect_category": "Aspect",
-            "img_w": "Width",
-            "img_h": "Height",
-            "avg_r": "Avg R",
-            "avg_g": "Avg G",
-            "avg_b": "Avg B",
-            "batch_id": "Batch ID",
-            "manual_order": "Order"
-        }, inplace=True)
-
-        st.dataframe(display_df, height=400)
-
-    else:
-        st.info("No images to display.")
-
-    conn.close()
