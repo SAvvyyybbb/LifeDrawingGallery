@@ -164,9 +164,13 @@ allowed_batch_map = dict(zip(df_allowed_batches["id"], df_allowed_batches["batch
 updated_rows = []
 
 for idx, row in df_images.iterrows():
-    st.write(f"**{Path(row['file_path']).name}**")
+    st.write(f"**Current Order: {row['manual_order']}**")  # show current order instead of file name
     new_order = st.number_input(
-        "Manual Order", value=int(row["manual_order"] or 0), min_value=0, step=1, key=f"order_{row['id']}"
+        "New Order",
+        value=int(row["manual_order"] or 0),
+        min_value=0,
+        step=1,
+        key=f"order_{row['id']}",
     )
     new_batch = st.selectbox(
         "Batch",
