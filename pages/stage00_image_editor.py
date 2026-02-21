@@ -27,7 +27,6 @@ def ensure_schema():
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
 
-    # 1️⃣ Create raw_image_data if missing
     cur.execute("""
     CREATE TABLE IF NOT EXISTS raw_image_data (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -37,9 +36,8 @@ def ensure_schema():
         veto_ind INTEGER DEFAULT 0
     )
     """)
-    conn.commit()  # commit so table exists before PRAGMA
+    conn.commit()
 
-    # 2️⃣ Ensure required columns exist
     cur.execute("PRAGMA table_info(raw_image_data)")
     cols = [c[1] for c in cur.fetchall()]
 
@@ -63,10 +61,6 @@ def sha256_file(path: Path) -> str:
 
 # ---------------- DB Update Logic ----------------
 def update_modified_hash_by_hash(original_hash, modified_hash):
-    """
-    Update the modified_hash based on the original hash.
-    Only updates the existing raw record.
-    """
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
@@ -89,9 +83,11 @@ def update_modified_hash_by_hash(original_hash, modified_hash):
 
 # ---------------- Raw Folder ----------------
 IMAGE_DIR = config.RAW_DIR
+
+# ✅ MINIMAL FIX: create folder if missing instead of crashing
 if not IMAGE_DIR.exists():
-    st.error(f"Raw folder not found: {IMAGE_DIR}")
-    st.stop()
+    IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+    st.warning(f"Raw folder missing — created: {IMAGE_DIR}")
 
 all_images = sorted(
     [p for p in IMAGE_DIR.iterdir() if p.suffix.lower() in (".png", ".jpg", ".jpeg")]
@@ -188,16 +184,12 @@ def classify_aspect(img):
 # ---------------- Save Logic ----------------
 def save_edit(move_next=False):
     try:
-        # Compute the original hash before saving
         original_hash = sha256_file(current_image_path)
 
-        # Save edited image
         cropped_img.save(current_image_path)
         new_hash = sha256_file(current_image_path)
 
-        # Update database record using original hash
         updated = update_modified_hash_by_hash(original_hash, new_hash)
-
         category = classify_aspect(cropped_img)
 
         if updated == 0:
@@ -205,7 +197,6 @@ def save_edit(move_next=False):
         else:
             st.success(f"Saved — Category: {category}")
 
-        # Move to next
         if move_next:
             if st.session_state.selected < len(all_images)-1:
                 st.session_state.selected += 1
