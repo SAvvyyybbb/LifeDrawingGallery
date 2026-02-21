@@ -13,7 +13,7 @@ OUTPUT_SIZE = config.OUTPUT_SIZE
 
 st.title("Batch Layout & Manual Ordering")
 st.write(
-    "Preview layout for UV map upload. Below, you can edit manual order or reassign images (same aspect category)."
+    "Preview layout for UV map upload. Below, edit manual order and reassign images (same aspect category) inline."
 )
 
 # ---------------- Verify DB ----------------
@@ -154,7 +154,7 @@ st.subheader("Batch Preview")
 render_batch_preview(df_images.sort_values("manual_order").reset_index(drop=True))
 st.divider()
 
-# ---------- manual editing ----------
+# ---------- inline manual editing ----------
 st.subheader("Edit Manual Order / Batch Assignment (Current Batch)")
 
 current_aspect = df_images["aspect_category"].iloc[0]
@@ -164,23 +164,28 @@ allowed_batch_map = dict(zip(df_allowed_batches["id"], df_allowed_batches["batch
 updated_rows = []
 
 for idx, row in df_images.iterrows():
-    st.write(f"**Current Order: {row['manual_order']}**")  # show current order instead of file name
-    new_order = st.number_input(
-        "New Order",
-        value=int(row["manual_order"] or 0),
-        min_value=0,
-        step=1,
-        key=f"order_{row['id']}",
-    )
-    new_batch = st.selectbox(
-        "Batch",
-        options=list(allowed_batch_map.keys()),
-        index=list(allowed_batch_map.keys()).index(row["batch_id"])
-        if row["batch_id"] in allowed_batch_map
-        else 0,
-        format_func=lambda x: allowed_batch_map[x],
-        key=f"batch_{row['id']}",
-    )
+    col1, col2, col3 = st.columns([1, 2, 2])
+    with col1:
+        st.write(f"Order: {row['manual_order']}")
+    with col2:
+        new_order = st.number_input(
+            "",
+            value=int(row["manual_order"] or 0),
+            min_value=0,
+            step=1,
+            key=f"order_{row['id']}",
+        )
+    with col3:
+        new_batch = st.selectbox(
+            "",
+            options=list(allowed_batch_map.keys()),
+            index=list(allowed_batch_map.keys()).index(row["batch_id"])
+            if row["batch_id"] in allowed_batch_map
+            else 0,
+            format_func=lambda x: allowed_batch_map[x],
+            key=f"batch_{row['id']}",
+        )
+
     updated_rows.append((row["id"], new_order, new_batch))
 
 if st.button("Save Changes"):
