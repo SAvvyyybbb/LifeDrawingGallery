@@ -1,0 +1,193 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="Page-1" id="dT8rLZU8tMHXGhXmuZC8">
+    <mxGraphModel dx="2590" dy="1275" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-66" parent="1" style="shape=callout;whiteSpace=wrap;html=1;perimeter=calloutPerimeter;position2=0.48;base=24;direction=east;size=80;position=0.48;" value="" vertex="1">
+          <mxGeometry height="450" width="1200" x="-150" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-65" parent="1" style="shape=callout;whiteSpace=wrap;html=1;perimeter=calloutPerimeter;position2=0.27;base=24;direction=west;size=90;position=0.27;" value="" vertex="1">
+          <mxGeometry height="400" width="1200" x="-150" y="760" as="geometry" />
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;" value="Discord" vertex="1">
+          <mxGeometry height="60" width="120" x="-260" y="690" as="geometry" />
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-4" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;" value="images_db" vertex="1">
+          <mxGeometry height="80" width="60" x="400" y="490" as="geometry" />
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-7" parent="1" style="rounded=1;whiteSpace=wrap;html=1;" value="Streamlit.io app" vertex="1">
+          <mxGeometry height="60" width="120" x="640" y="500" as="geometry" />
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-10" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;" value="Discord bot&amp;nbsp;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;local sqlite.db&lt;/span&gt;" vertex="1">
+          <mxGeometry height="80" width="60" x="130" y="490" as="geometry" />
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-29" parent="1" style="shape=cube;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;darkOpacity=0.05;darkOpacity2=0.1;" value="Raw image files" vertex="1">
+          <mxGeometry height="80" width="120" x="70" y="910" as="geometry" />
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-30" parent="1" style="shape=cube;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;darkOpacity=0.05;darkOpacity2=0.1;" value="Normalized and sorted image files" vertex="1">
+          <mxGeometry height="80" width="120" x="280" y="910" as="geometry" />
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-31" parent="1" style="shape=cube;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;darkOpacity=0.05;darkOpacity2=0.1;" value="Stitched outputs" vertex="1">
+          <mxGeometry height="80" width="120" x="450" y="910" as="geometry" />
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-32" parent="1" style="shape=cube;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;darkOpacity=0.05;darkOpacity2=0.1;" value="Named and formalized UV map" vertex="1">
+          <mxGeometry height="80" width="120" x="630" y="910" as="geometry" />
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-33" parent="1" style="rounded=1;whiteSpace=wrap;html=1;" value="Life Drawing world pointer" vertex="1">
+          <mxGeometry height="60" width="180" x="827" y="690" as="geometry" />
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-35" edge="1" parent="1" source="TgTqXhy73nRtWgJJtp_4-33" style="endArrow=none;dashed=1;html=1;rounded=0;exitX=0;exitY=0.5;exitDx=0;exitDy=0;startArrow=classic;startFill=1;endFill=0;entryX=1.013;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;" target="TgTqXhy73nRtWgJJtp_4-50" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="470" y="820" as="sourcePoint" />
+            <mxPoint x="761" y="720" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-36" edge="1" parent="1" source="TgTqXhy73nRtWgJJtp_4-58" style="endArrow=none;dashed=1;html=1;rounded=0;entryX=0;entryY=0;entryDx=120;entryDy=50;entryPerimeter=0;exitX=0;exitY=0.5;exitDx=0;exitDy=0;startArrow=classic;startFill=1;endFill=0;" target="TgTqXhy73nRtWgJJtp_4-32" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="820" y="960" as="sourcePoint" />
+            <mxPoint x="760" y="960" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-39" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;exitX=1.025;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=-0.013;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;" target="TgTqXhy73nRtWgJJtp_4-31" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="400" y="949.71" as="sourcePoint" />
+            <mxPoint x="446" y="949.71" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-40" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;exitX=1.025;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=-0.008;entryY=0.504;entryDx=0;entryDy=0;entryPerimeter=0;" target="TgTqXhy73nRtWgJJtp_4-32" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="570" y="949.8" as="sourcePoint" />
+            <mxPoint x="616" y="949.8" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-41" parent="1" style="shape=cube;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;darkOpacity=0.05;darkOpacity2=0.1;" value="Archival folder" vertex="1">
+          <mxGeometry height="80" width="120" x="280" y="1060" as="geometry" />
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-42" parent="1" style="shape=cube;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;darkOpacity=0.05;darkOpacity2=0.1;" value="Archival folder" vertex="1">
+          <mxGeometry height="80" width="120" x="630" y="1060" as="geometry" />
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-43" edge="1" parent="1" source="TgTqXhy73nRtWgJJtp_4-30" style="endArrow=classic;html=1;rounded=0;exitX=0;exitY=0;exitDx=70;exitDy=80;exitPerimeter=0;entryX=0.583;entryY=-0.012;entryDx=0;entryDy=0;entryPerimeter=0;" target="TgTqXhy73nRtWgJJtp_4-41" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="440" y="850" as="sourcePoint" />
+            <mxPoint x="490" y="800" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-44" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;exitX=0;exitY=0;exitDx=70;exitDy=80;exitPerimeter=0;entryX=0.583;entryY=-0.012;entryDx=0;entryDy=0;entryPerimeter=0;" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="700" y="991" as="sourcePoint" />
+            <mxPoint x="700" y="1060" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-46" parent="1" style="rounded=1;whiteSpace=wrap;html=1;" value="Discord reader scraper and scheduler bot.&amp;nbsp;&lt;div&gt;Aka Beatrice.&lt;/div&gt;" vertex="1">
+          <mxGeometry height="60" width="120" x="100" y="690" as="geometry" />
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-47" edge="1" parent="1" source="TgTqXhy73nRtWgJJtp_4-2" style="endArrow=classic;html=1;rounded=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;startArrow=classic;startFill=1;" target="TgTqXhy73nRtWgJJtp_4-46" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <Array as="points">
+              <mxPoint x="-10" y="720" />
+            </Array>
+            <mxPoint x="90" y="620" as="sourcePoint" />
+            <mxPoint x="240" y="595" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-48" edge="1" parent="1" source="TgTqXhy73nRtWgJJtp_4-46" style="endArrow=classic;html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;startArrow=none;startFill=0;endFill=1;entryX=-0.004;entryY=0.502;entryDx=0;entryDy=0;entryPerimeter=0;" target="TgTqXhy73nRtWgJJtp_4-50" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <Array as="points">
+              <mxPoint x="600" y="720" />
+            </Array>
+            <mxPoint x="350.0000000000002" y="832.4999999999999" as="sourcePoint" />
+            <mxPoint x="570" y="705" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-50" parent="1" style="shape=cube;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;darkOpacity=0.05;darkOpacity2=0.1;" value="Github image repo&lt;div&gt;&lt;br&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="80" width="120" x="640" y="680" as="geometry" />
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-51" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;entryX=-0.023;entryY=0.489;entryDx=0;entryDy=0;entryPerimeter=0;" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="-10" y="949.66" as="sourcePoint" />
+            <mxPoint x="67.24000000000024" y="949.7799999999999" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-52" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="Input from scraper" vertex="1">
+          <mxGeometry height="30" width="110" x="-120" y="935" as="geometry" />
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-53" edge="1" parent="1" style="shape=flexArrow;endArrow=classic;startArrow=classic;html=1;rounded=0;" value="">
+          <mxGeometry height="100" relative="1" width="100" as="geometry">
+            <mxPoint x="699.47" y="680" as="sourcePoint" />
+            <mxPoint x="699.47" y="560" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-58" parent="1" style="rounded=1;whiteSpace=wrap;html=1;" value="Life Drawing world pointer" vertex="1">
+          <mxGeometry height="60" width="180" x="827" y="930" as="geometry" />
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-60" edge="1" parent="1" source="TgTqXhy73nRtWgJJtp_4-10" style="endArrow=classic;html=1;rounded=0;startArrow=classic;startFill=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;endFill=1;exitPerimeter=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="TgTqXhy73nRtWgJJtp_4-46" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="300" y="795" as="sourcePoint" />
+            <mxPoint x="160" y="700" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-61" edge="1" parent="1" source="TgTqXhy73nRtWgJJtp_4-4" style="endArrow=classic;startArrow=classic;html=1;rounded=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;" target="TgTqXhy73nRtWgJJtp_4-7" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="470" y="455" as="sourcePoint" />
+            <mxPoint x="520" y="405" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-62" edge="1" parent="1" source="TgTqXhy73nRtWgJJtp_4-10" style="endArrow=classic;dashed=1;html=1;rounded=0;endFill=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;" target="TgTqXhy73nRtWgJJtp_4-4" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="210" y="535" as="sourcePoint" />
+            <mxPoint x="260" y="485" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-64" edge="1" parent="1" style="shape=flexArrow;endArrow=classic;startArrow=classic;html=1;rounded=0;entryX=0;entryY=0;entryDx=120;entryDy=50;entryPerimeter=0;" target="TgTqXhy73nRtWgJJtp_4-29" value="">
+          <mxGeometry height="100" relative="1" width="100" as="geometry">
+            <mxPoint x="280" y="960" as="sourcePoint" />
+            <mxPoint x="530" y="870" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-75" parent="1" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;align=left;" value="&lt;h1 style=&quot;margin-top: 0px;&quot;&gt;&lt;span style=&quot;white-space: pre;&quot;&gt;&#x9;&lt;/span&gt;&lt;/h1&gt;&lt;p style=&quot;&quot;&gt;Table is created on &quot;stitching&quot;.&lt;/p&gt;&lt;p style=&quot;&quot;&gt;Contains batch descriptions of staged images for later lookup.&lt;/p&gt;&lt;p&gt;&lt;br&gt;&lt;/p&gt;" vertex="1">
+          <mxGeometry height="120" width="180" x="880" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-77" parent="1" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;" value="&lt;h1 style=&quot;margin-top: 0px;&quot;&gt;&lt;br&gt;&lt;/h1&gt;&lt;p&gt;Table is created on &quot;stitching&quot;.&lt;/p&gt;&lt;p&gt;Contains data describing leftover and unstitched images from.&lt;/p&gt;&lt;p&gt;Containg previous file path, archived file path (either in stitched or leftover).&lt;/p&gt;&lt;p&gt;Records with export_type = leftover will be reintroduced into ingestion on prompt in Streamlit.&lt;/p&gt;" vertex="1">
+          <mxGeometry height="220" width="180" x="690" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-78" parent="1" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;" value="&lt;h1 style=&quot;margin-top: 0px;&quot;&gt;&lt;br&gt;&lt;/h1&gt;&lt;p&gt;Table is updated on &quot;ingestion scan&quot;.&lt;/p&gt;&lt;p&gt;Contains file path for current stitched batch outputs and Hash and Phash.&lt;br&gt;Stitch date and ID.&lt;/p&gt;&lt;p&gt;Note: Was planning on have these move to final destination in final review step but TBD.&lt;/p&gt;" vertex="1">
+          <mxGeometry height="350" width="180" x="480" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-83" parent="1" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;" value="&lt;h1 style=&quot;margin-top: 0px;&quot;&gt;&lt;br&gt;&lt;/h1&gt;&lt;p&gt;Data is created by scraper upon collection from Discord.&lt;/p&gt;&lt;p&gt;Contains images initial hash and phash for recognition.&lt;/p&gt;&lt;p&gt;Also contains a modified hash if manual edits have been made by gallery admin.&lt;/p&gt;&lt;p&gt;This is the front end query table where is_stitched and in_processing can be identified using SQL query.&lt;/p&gt;" vertex="1">
+          <mxGeometry height="270" width="130" x="-140" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-84" parent="1" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;" value="&lt;h1 style=&quot;margin-top: 0px;&quot;&gt;&lt;br&gt;&lt;/h1&gt;&lt;p&gt;Table is updated on &quot;pre processing&quot; step.&lt;/p&gt;&lt;p&gt;It contains a lookup between original Discord image hash, and post edit hash.&lt;br&gt;&lt;br&gt;Original_hash = discord&lt;br&gt;hash = new cleaned image hash&lt;/p&gt;&lt;p&gt;This also contains the categorization for the image by aspect ratio, and timestamp.&lt;/p&gt;" vertex="1">
+          <mxGeometry height="270" width="190" x="20" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-85" parent="1" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;" value="&lt;h1 style=&quot;margin-top: 0px;&quot;&gt;&lt;br&gt;&lt;/h1&gt;&lt;p&gt;Table is updated on &quot;ingestion scan&quot;. &lt;br&gt;&lt;br&gt;Images that have been cleaned of borders are assigned a batch_id and sorted by colour weighting.&lt;br&gt;&lt;br&gt;Join to previous table with processed_image_data.hash = images.hash.&lt;br&gt;&lt;br&gt;Also contains perceptual_hash for deduplication in stitching steps.&lt;/p&gt;&lt;p&gt;This table assigns order_ids for each image in each batch_id.&lt;/p&gt;" vertex="1">
+          <mxGeometry height="340" width="190" x="280" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-86" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="raw_image_data" vertex="1">
+          <mxGeometry height="30" width="60" x="-120" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-87" edge="1" parent="1" source="TgTqXhy73nRtWgJJtp_4-66" style="endArrow=none;html=1;rounded=0;exitX=0;exitY=0.087;exitDx=0;exitDy=0;exitPerimeter=0;entryX=1;entryY=0.092;entryDx=0;entryDy=0;entryPerimeter=0;" target="TgTqXhy73nRtWgJJtp_4-66" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="440" y="390" as="sourcePoint" />
+            <mxPoint x="490" y="340" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-88" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="processed_image_data" vertex="1">
+          <mxGeometry height="30" width="60" x="60" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-89" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="images" vertex="1">
+          <mxGeometry height="30" width="60" x="280" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-90" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="batches" vertex="1">
+          <mxGeometry height="30" width="60" x="480" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-91" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="export_moves" vertex="1">
+          <mxGeometry height="30" width="60" x="710" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="TgTqXhy73nRtWgJJtp_4-92" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="stitched_phashes" vertex="1">
+          <mxGeometry height="30" width="60" x="910" y="40" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
