@@ -293,29 +293,64 @@ async def my_showcase(interaction: discord.Interaction):
 # ---------------- Reaction Handling ----------------
 @bot.event
 async def on_raw_reaction_add(payload):
-    """Listen for the veto emoji and update the DB."""
+    """Listen for the veto emoji and update the DB, advising the user of its pipeline state."""
     if str(payload.emoji) != VETO_EMOJI: return
     if payload.user_id == bot.user.id: return
 
     conn = config.get_db_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
     
-    cursor.execute("SELECT poster_id, hash, batched FROM raw_image_data WHERE message_id = %s", (payload.message_id,))
+    # Check pipeline state
+    cursor.execute("""
+        SELECT r.poster_id, r.hash, r.message_id, i.batch_id, b.status as batch_status, b.batch_name
+        FROM raw_image_data r
+        LEFT JOIN images i ON r.hash = i.hash
+        LEFT JOIN batches b ON i.batch_id = b.id
+        WHERE r.message_id = %s
+    """, (payload.message_id,))
+    
     row = cursor.fetchone()
     
-    if row and payload.user_id == row[0] and row[2] != 1: 
-        img_hash = row[1]
-        print(f"[Veto] User {payload.user_id} vetoed image {img_hash} (Message: {payload.message_id})")
+    if row and payload.user_id == row['poster_id']:
+        print(f"[Veto] User {payload.user_id} vetoed image {row['hash']} (Message: {payload.message_id})")
+        
+        # 1. Update Database
         cursor.execute("UPDATE raw_image_data SET veto = 1 WHERE message_id = %s", (payload.message_id,))
         conn.commit()
         
+        # 2. Update Reactions visually on Discord
         try:
-            channel = bot.get_channel(payload.channel_id)
+            channel = await bot.fetch_channel(payload.channel_id)
             message = await channel.fetch_message(payload.message_id)
             try: await message.remove_reaction(ACCEPT_EMOJI, bot.user)
             except: pass
             await message.add_reaction("⛔")
-        except Exception as e: print(f"[Veto] Could not update reactions: {e}")
+        except Exception as e: 
+            print(f"[Veto] Could not update reactions: {e}")
+            
+        # 3. Determine Pipeline State & DM User
+        try:
+            user = await bot.fetch_user(payload.user_id)
+            status = row['batch_status']
+            batch_name = row['batch_name']
+            
+            if not status: # Not in a batch yet (Raw, Image Triage, or just unbatched)
+                await user.send("✅ **Veto Successful:** Your image was removed from the active queue and will not be batched.")
+            
+            elif status in ('pending', 'complete'): # In Batch Manager
+                await user.send(f"⚠️ **Veto Flagged:** Your image was already grouped into batch `{batch_name}`, but we've added a giant red warning to it! An admin will likely remove it before stitching.")
+                
+            elif status in ('stitched', 'validated'): # Already baked into a UV Map waiting for deploy
+                await user.send(f"🚨 **Late Veto Warning:** Your image is already baked into a finalized UV Map (`{batch_name}`) waiting for deployment! It has been flagged as vetoed, but you may want to message an admin to manually abort the deployment.")
+                
+            elif status in ('deployed', 'archived'): # Out in the wild
+                await user.send(f"💀 **Critical Late Veto:** Your image is ALREADY LIVE (or archived) on the repository inside UV Map `{batch_name}`. Clicking Veto *does not* automatically un-publish images. You must contact an admin immediately to have the texture physically recalled and repacked.")
+        
+        except discord.Forbidden:
+            print(f"[Veto] Cannot DM user {payload.user_id}. DMs are closed.")
+        except Exception as e:
+            print(f"[Veto] Error DMing user: {e}")
+
     conn.close()
 
 # ---------------- Main Logic ----------------
