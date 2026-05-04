@@ -175,10 +175,23 @@ else:
                     st.error(f"Download or Archive failed: {e}")
                     st.stop()
                     
-            with st.spinner("Pushing changes to GitHub..."):
+            with st.spinner("Updating database tracker and pushing changes to GitHub..."):
                 try:
+                    conn = config.get_db_connection()
+                    cursor = conn.cursor()
+                    
+                    for filename in to_replace:
+                        batch_name_target = Path(filename).stem
+                        
+                        # 1. Archive previously deployed batch of this name
+                        cursor.execute("UPDATE batches SET status = 'archived' WHERE batch_name = %s AND status = 'deployed'", (batch_name_target,))
+                        
+                        # 2. Promote the newly validated batch to deployed
+                        cursor.execute("UPDATE batches SET status = 'deployed' WHERE batch_name = %s AND status = 'validated'", (batch_name_target,))
+                    
+                    conn.commit()
+                    
                     repo_root = config.ROOT_DIR
-                    git_helper.git_pull(repo_root)
                     git_helper.git_add(repo_root)
                     
                     # Commit and push
@@ -190,6 +203,6 @@ else:
                     else:
                         st.info("No changes were detected by Git to push.")
                 except Exception as e:
-                    st.error(f"GitHub Deployment failed: {e}")
+                    st.error(f"Database tracking or GitHub Deployment failed: {e}")
 
 conn.close()

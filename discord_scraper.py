@@ -239,6 +239,57 @@ async def my_submissions(interaction: discord.Interaction):
     view = SubmissionsView(interaction.user.id, items)
     await interaction.followup.send(embeds=view.get_embeds(), view=view, ephemeral=True)
 
+@bot.tree.command(name="my_showcase", description="See which of your artworks have been showcased in the final gallery UVs.")
+async def my_showcase(interaction: discord.Interaction):
+    """Fetch user's images that are in deployed or archived batches."""
+    await interaction.response.defer(ephemeral=True)
+    
+    conn = config.get_db_connection()
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    
+    cursor.execute("""
+        SELECT b.batch_name, b.status, r.original_filename, b.created_at
+        FROM raw_image_data r
+        JOIN images i ON r.hash = i.hash
+        JOIN batches b ON i.batch_id = b.id
+        WHERE r.poster_id = %s AND b.status IN ('deployed', 'archived')
+        ORDER BY b.created_at DESC
+    """, (interaction.user.id,))
+    
+    items = cursor.fetchall()
+    conn.close()
+    
+    if not items:
+        await interaction.followup.send("You don't have any artworks currently or previously showcased in the gallery yet. Keep submitting!", ephemeral=True)
+        return
+        
+    current = [item for item in items if item['status'] == 'deployed']
+    archived = [item for item in items if item['status'] == 'archived']
+    
+    embed = discord.Embed(
+        title=f"🎨 {interaction.user.display_name}'s Showcase History",
+        description="A tracker of your artworks that made it to the final compiled gallery textures.",
+        color=discord.Color.gold()
+    )
+    
+    if current:
+        current_text = ""
+        for item in current[:10]: # Limit display to avoid embed limits
+            current_text += f"• **{item['original_filename']}** -> `UV Map: {item['batch_name']}`\n"
+        if len(current) > 10:
+            current_text += f"*...and {len(current) - 10} more!*\n"
+        embed.add_field(name="🌟 Currently on Display", value=current_text, inline=False)
+        
+    if archived:
+        arch_text = ""
+        for item in archived[:10]:
+            arch_text += f"• **{item['original_filename']}** -> `UV Map: {item['batch_name']} (Archived)`\n"
+        if len(archived) > 10:
+            arch_text += f"*...and {len(archived) - 10} more!*\n"
+        embed.add_field(name="📚 Past Showcases (Archived)", value=arch_text, inline=False)
+        
+    await interaction.followup.send(embed=embed, ephemeral=True)
+
 # ---------------- Reaction Handling ----------------
 @bot.event
 async def on_raw_reaction_add(payload):
