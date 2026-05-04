@@ -290,6 +290,81 @@ async def my_showcase(interaction: discord.Interaction):
         
     await interaction.followup.send(embed=embed, ephemeral=True)
 
+@bot.tree.command(name="gallery_stats", description="View overall statistics of the Life Drawing Gallery pipeline.")
+async def gallery_stats(interaction: discord.Interaction):
+    """Fetch and display overall pipeline statistics."""
+    await interaction.response.defer(ephemeral=False)
+    conn = config.get_db_connection()
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    
+    # Raw stats
+    cursor.execute("SELECT processing, veto, count(*) FROM raw_image_data GROUP BY processing, veto")
+    raw_stats = cursor.fetchall()
+    pending_triage = sum(r['count'] for r in raw_stats if r['processing'] == 0 and r['veto'] == 0)
+    total_vetoed = sum(r['count'] for r in raw_stats if r['veto'] == 1)
+    
+    # Batch stats
+    cursor.execute("SELECT status, count(*) FROM batches GROUP BY status")
+    batch_stats = cursor.fetchall()
+    
+    pending_batching = sum(r['count'] for r in batch_stats if r['status'] in ('pending', 'complete'))
+    pending_validation = sum(r['count'] for r in batch_stats if r['status'] == 'stitched')
+    pending_deployment = sum(r['count'] for r in batch_stats if r['status'] == 'validated')
+    live_uvs = sum(r['count'] for r in batch_stats if r['status'] == 'deployed')
+    archived_uvs = sum(r['count'] for r in batch_stats if r['status'] == 'archived')
+    
+    conn.close()
+    
+    embed = discord.Embed(title="📊 Gallery Pipeline Statistics", color=discord.Color.blue())
+    embed.add_field(name="📥 1. Raw Submissions", value=f"• Pending Triage: **{pending_triage}** images\n• Vetoed/Rejected: **{total_vetoed}** images", inline=False)
+    embed.add_field(name="📦 2. Batch Manager", value=f"• Active Batches: **{pending_batching}**", inline=False)
+    embed.add_field(name="🧵 3. Stitching & Validation", value=f"• Pending Validation: **{pending_validation}** batches\n• Ready for Deploy: **{pending_deployment}** batches", inline=False)
+    embed.add_field(name="🌟 4. Live Gallery", value=f"• Currently Live UVs: **{live_uvs}**\n• Archived/Legacy UVs: **{archived_uvs}**", inline=False)
+    
+    await interaction.followup.send(embed=embed)
+
+@bot.tree.command(name="my_stats", description="View your personal contribution statistics to the Gallery.")
+async def my_stats(interaction: discord.Interaction):
+    """Fetch and display user-specific statistics."""
+    await interaction.response.defer(ephemeral=False)
+    conn = config.get_db_connection()
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    
+    poster_id = str(interaction.user.id)
+    
+    cursor.execute("SELECT processing, veto, count(*) FROM raw_image_data WHERE poster_id = %s GROUP BY processing, veto", (poster_id,))
+    raw_stats = cursor.fetchall()
+    
+    total_submitted = sum(r['count'] for r in raw_stats)
+    total_vetoed = sum(r['count'] for r in raw_stats if r['veto'] == 1)
+    
+    cursor.execute("""
+        SELECT b.status, count(*) 
+        FROM raw_image_data r
+        JOIN images i ON r.hash = i.hash
+        JOIN batches b ON i.batch_id = b.id
+        WHERE r.poster_id = %s
+        GROUP BY b.status
+    """, (poster_id,))
+    batch_stats = cursor.fetchall()
+    
+    live_count = sum(r['count'] for r in batch_stats if r['status'] == 'deployed')
+    archived_count = sum(r['count'] for r in batch_stats if r['status'] == 'archived')
+    
+    conn.close()
+    
+    embed = discord.Embed(title=f"📈 {interaction.user.display_name}'s Stats", color=discord.Color.green())
+    embed.add_field(name="Total Submissions", value=f"**{total_submitted}** images", inline=True)
+    embed.add_field(name="Vetoed/Rejected", value=f"**{total_vetoed}** images", inline=True)
+    embed.add_field(name="Currently Live", value=f"**{live_count}** artworks", inline=True)
+    embed.add_field(name="Archived/Past", value=f"**{archived_count}** artworks", inline=True)
+    
+    if total_submitted > 0:
+        approval_rate = int(((total_submitted - total_vetoed) / total_submitted) * 100)
+        embed.set_footer(text=f"Approval Rate: {approval_rate}%")
+        
+    await interaction.followup.send(embed=embed)
+
 # ---------------- Reaction Handling ----------------
 @bot.event
 async def on_raw_reaction_add(payload):
@@ -535,12 +610,21 @@ async def scrape_now(interaction: discord.Interaction):
 async def main_logic():
     try:
         await bot.wait_until_ready()
-        await perform_scrape(None)
         
-        # Keep background task alive
-        while True: await asyncio.sleep(3600)
+        while not bot.is_closed():
+            try:
+                # Perform a silent background scrape every hour just in case
+                await perform_scrape(None)
+            except Exception as e:
+                print(f"[Warning] Background scrape failed: {e}")
+            
+            # Sleep for 1 hour, checking if bot closed every 5 seconds to gracefully exit
+            for _ in range(720):
+                if bot.is_closed(): break
+                await asyncio.sleep(5)
+                
     except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+        print(f"An unexpected error occurred in main_logic loop: {e}")
         traceback.print_exc()
 
 # ---------------- Entry Point ----------------

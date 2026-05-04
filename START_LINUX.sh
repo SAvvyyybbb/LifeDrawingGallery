@@ -95,8 +95,14 @@ echo "👉 Click here: http://localhost:8501"
 echo ""
 
 # Start Scraper in background
-python3 discord_scraper.py &
-echo "[Scraper] Starting Discord Bot in background..."
+(
+  while true; do
+    python3 discord_scraper.py
+    echo "[WARNING] Discord Bot crashed or stopped. Restarting in 5 seconds..."
+    sleep 5
+  done
+) &
+echo "[Scraper] Starting Discord Bot in background (with auto-restart)..."
 
 echo ""
 echo "========================================"
