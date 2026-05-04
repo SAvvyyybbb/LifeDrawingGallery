@@ -338,13 +338,13 @@ async def on_raw_reaction_add(payload):
                 await user.send("✅ **Veto Successful:** Your image was removed from the active queue and will not be batched.")
             
             elif status in ('pending', 'complete'): # In Batch Manager
-                await user.send(f"⚠️ **Veto Flagged:** Your image was already grouped into batch `{batch_name}`, but we've added a giant red warning to it! An admin will likely remove it before stitching.")
+                await user.send(f"⚠️ **Veto Flagged:** Your image was already grouped into batch `{batch_name}`, but we've added a giant red warning to it! Savvb will likely remove it before stitching.")
                 
             elif status in ('stitched', 'validated'): # Already baked into a UV Map waiting for deploy
-                await user.send(f"🚨 **Late Veto Warning:** Your image is already baked into a finalized UV Map (`{batch_name}`) waiting for deployment! It has been flagged as vetoed, but you may want to message an admin to manually abort the deployment.")
+                await user.send(f"🚨 **Late Veto Warning:** Your image is already baked into a finalized UV Map (`{batch_name}`) waiting for deployment! It has been flagged as vetoed, but you may want to message Savvb to manually abort the deployment.")
                 
             elif status in ('deployed', 'archived'): # Out in the wild
-                await user.send(f"💀 **Critical Late Veto:** Your image is ALREADY LIVE (or archived) on the repository inside UV Map `{batch_name}`. Clicking Veto *does not* automatically un-publish images. You must contact an admin immediately to have the texture physically recalled and repacked.")
+                await user.send(f"💀 **Critical Late Veto:** Your image is ALREADY LIVE (or archived) on the repository inside UV Map `{batch_name}`. Clicking Veto *does not* automatically un-publish images. You must contact Savvb immediately to have the texture physically recalled and repacked.")
         
         except discord.Forbidden:
             print(f"[Veto] Cannot DM user {payload.user_id}. DMs are closed.")
