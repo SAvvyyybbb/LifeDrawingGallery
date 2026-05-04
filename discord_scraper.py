@@ -501,7 +501,23 @@ async def perform_scrape(interaction: discord.Interaction = None):
     
     result_msg = f"[Scraper] Done. New images: {total_new_images}."
     print(result_msg)
-    if interaction: await interaction.followup.send(f"✅ **Scraping Complete!** Found `{total_new_images}` new images.", ephemeral=True)
+    if interaction: 
+        dashboard_url = "https://lifedrawinggallery.streamlit.app/" # Fallback url
+        # Try to pull a custom URL from the DB if they have one configured
+        try:
+            conn2 = config.get_db_connection()
+            c2 = conn2.cursor()
+            c2.execute("SELECT value FROM metadata WHERE key = 'DASHBOARD_URL'")
+            row = c2.fetchone()
+            if row: dashboard_url = row[0]
+            conn2.close()
+        except: pass
+        
+        await interaction.followup.send(
+            f"✅ **Scraping Complete!** Found `{total_new_images}` new images.\n\n"
+            f"👉 [Click here to open the Image Triage Dashboard]({dashboard_url})", 
+            ephemeral=True
+        )
 
 # ---------------- Slash Commands ----------------
 @bot.tree.command(name="scrape_now", description="Admin only: Manually trigger the scraper to fetch new images from tracked channels.")
