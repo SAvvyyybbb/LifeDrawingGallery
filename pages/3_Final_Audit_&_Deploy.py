@@ -33,15 +33,17 @@ except: pass
 user_pass = st.sidebar.text_input("Enter Admin Password to allow modifications", type="password")
 can_modify = (user_pass == ADMIN_PASSWORD)
 
-if can_modify:
-    st.sidebar.success("✅ Authorized to modify Live UVs")
+if user_pass == "":
+    st.sidebar.info("🔒 Enter password to unlock deployment actions.")
+elif can_modify:
+    st.sidebar.success("✅ Password Accepted! You may now modify Live UVs.")
 else:
-    st.sidebar.warning("⚠️ Read-only mode. Enter password to unlock deployment actions.")
+    st.sidebar.error("❌ Incorrect Password.")
 
 # ---------------- Load Master List ----------------
 try:
     master_df = pd.read_csv("MASTER_LIST.csv")
-    MASTER_FILES = master_df["Name"].tolist()
+    MASTER_FILES = [Path(f).stem for f in master_df["Name"].tolist()]
 except Exception as e:
     st.error(f"Error loading MASTER_LIST.csv: {e}")
     st.stop()
@@ -51,11 +53,11 @@ st.markdown("Manage Live UVs, Pending deployments, and Archives. Ensures 1:1 par
 
 # ---------------- Fetch DB Records ----------------
 cursor.execute("""
-    SELECT b.id, b.batch_name, b.status, b.notes, b.created_at, s.file_path as storage_key, s.hash
+    SELECT b.id, b.batch_name, b.status, b.notes, b.timestamp, s.file_path as storage_key, s.hash
     FROM batches b
     LEFT JOIN stitched_phashes s ON b.id = s.batch_id
     WHERE b.status IN ('validated', 'deployed', 'archived')
-    ORDER BY b.created_at DESC
+    ORDER BY b.timestamp DESC
 """)
 all_records = cursor.fetchall()
 
@@ -157,8 +159,12 @@ for target_name in MASTER_FILES:
         with col_live:
             st.subheader("🌟 Live Tray")
             if live:
-                st.caption(f"Batch ID: {live['id']} | Date: {live['created_at'].strftime('%Y-%m-%d')}")
-                st.image(get_uv_preview(live['storage_key']), use_container_width=True)
+                st.caption(f"Batch ID: {live['id']} | Date: {live['timestamp'].strftime('%Y-%m-%d') if hasattr(live['timestamp'], 'strftime') else live['timestamp']}")
+                preview_img = get_uv_preview(live['storage_key'])
+                if preview_img:
+                    st.image(preview_img, use_container_width=True)
+                else:
+                    st.warning("Preview not available.")
                 
                 notes = st.text_area("Notes (Live)", value=live.get('notes', ''), key=f"note_l_{live['id']}")
                 if st.button("Save Notes", key=f"save_l_{live['id']}"):
@@ -166,7 +172,13 @@ for target_name in MASTER_FILES:
                     conn.commit()
                     st.success("Notes saved.")
             else:
-                st.error("Missing! No live image for this slot.")
+                local_path = Path("Gallery UVs") / f"{target_name}.png"
+                if local_path.exists():
+                    st.warning("⚠️ Unmanaged Legacy File")
+                    st.caption("A file exists in your local Gallery UVs folder, but it is not currently tracked by the new database system. It will be automatically tracked when you deploy your first pending batch here.")
+                    st.image(str(local_path), use_container_width=True)
+                else:
+                    st.error("Missing! No live image for this slot.")
 
         # PENDING TRAY
         with col_pend:
@@ -174,8 +186,12 @@ for target_name in MASTER_FILES:
             if not pending:
                 st.info("No newly validated batches.")
             for p in pending:
-                st.markdown(f"**Batch {p['id']}** ({p['created_at'].strftime('%Y-%m-%d')})")
-                st.image(get_uv_preview(p['storage_key']), use_container_width=True)
+                st.markdown(f"**Batch {p['id']}** ({p['timestamp'].strftime('%Y-%m-%d') if hasattr(p['timestamp'], 'strftime') else p['timestamp']})")
+                p_prev = get_uv_preview(p['storage_key'])
+                if p_prev:
+                    st.image(p_prev, use_container_width=True)
+                else:
+                    st.warning("Preview not available.")
                 
                 # Notes
                 p_notes = st.text_area("Notes", value=p.get('notes', ''), key=f"note_p_{p['id']}", height=68)
@@ -188,6 +204,11 @@ for target_name in MASTER_FILES:
                     with st.spinner("Processing..."):
                         if perform_deployment(target_name, p, live):
                             st.rerun()
+                if st.button("⏪ Abort & Return to Validation", key=f"abort_{p['id']}", disabled=not can_modify):
+                    cursor.execute("UPDATE batches SET status = 'stitched' WHERE id = %s", (p['id'],))
+                    conn.commit()
+                    st.warning(f"Batch {p['id']} returned to validation.")
+                    st.rerun()
 
         # ARCHIVE TRAY
         with col_arch:
@@ -196,12 +217,16 @@ for target_name in MASTER_FILES:
                 st.info("No archives.")
             
             if archived:
-                arch_opts = {a['id']: f"ID: {a['id']} - {a['created_at'].strftime('%Y-%m-%d')}" for a in archived}
+                arch_opts = {a['id']: f"ID: {a['id']} - {(a['timestamp'].strftime('%Y-%m-%d') if hasattr(a['timestamp'], 'strftime') else a['timestamp'])}" for a in archived}
                 selected_arch_id = st.selectbox("Select Archive to View/Restore:", options=list(arch_opts.keys()), format_func=lambda x: arch_opts[x], key=f"sel_arch_{target_name}")
                 
                 selected_arch = next((a for a in archived if a['id'] == selected_arch_id), None)
                 if selected_arch:
-                    st.image(get_uv_preview(selected_arch['storage_key']), use_container_width=True)
+                    a_prev = get_uv_preview(selected_arch['storage_key'])
+                    if a_prev:
+                        st.image(a_prev, use_container_width=True)
+                    else:
+                        st.warning("Preview not available.")
                     
                     # Notes
                     a_notes = st.text_area("Archive Notes", value=selected_arch.get('notes', ''), key=f"note_a_{selected_arch['id']}", height=68)
