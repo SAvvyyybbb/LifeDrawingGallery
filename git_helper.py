@@ -8,6 +8,13 @@ def run_cmd(cmd, cwd):
         raise Exception(f"Git Command Failed: {' '.join(cmd)}\n{result.stderr}")
     return result.stdout.strip()
 
+def setup_git(repo_dir: Path, token: str, user: str, repo: str):
+    """Configures the git remote and identity for Streamlit Cloud."""
+    url = f"https://{user}:{token}@github.com/{user}/{repo}.git"
+    run_cmd(["git", "remote", "set-url", "origin", url], cwd=repo_dir)
+    run_cmd(["git", "config", "user.name", "Gallery Bot"], cwd=repo_dir)
+    run_cmd(["git", "config", "user.email", "bot@lifedrawing.com"], cwd=repo_dir)
+
 def git_add(repo_dir: Path):
     # Strictly limit addition to Gallery UVs folder to prevent unexpected scope issues
     run_cmd(["git", "add", "Gallery UVs/"], cwd=repo_dir)

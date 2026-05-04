@@ -8,10 +8,35 @@ import shutil
 import git_helper
 from datetime import datetime
 
-st.set_page_config(page_title="Final Audit & Deploy", layout="wide")
+st.set_page_config(page_title="UV Gallery Manager", layout="wide")
 
-st.title("🚀 Final Audit & Deploy")
-st.markdown("Validate all required UV maps against the master list and deploy to GitHub.")
+# ---------------- Database Connection & Migration ----------------
+try:
+    conn = config.get_db_connection()
+    cursor = conn.cursor(cursor_factory=config.psycopg2.extras.RealDictCursor)
+    
+    # Ensure notes column exists
+    cursor.execute("ALTER TABLE batches ADD COLUMN IF NOT EXISTS notes TEXT DEFAULT ''")
+    conn.commit()
+except Exception as e:
+    st.error(f"Failed to connect to or migrate cloud database: {e}")
+    st.stop()
+
+# ---------------- Password Protection ----------------
+st.sidebar.title("🔒 Security")
+ADMIN_PASSWORD = "admin" # Fallback if not in secrets
+try:
+    if "ADMIN_PASSWORD" in st.secrets:
+        ADMIN_PASSWORD = st.secrets["ADMIN_PASSWORD"]
+except: pass
+
+user_pass = st.sidebar.text_input("Enter Admin Password to allow modifications", type="password")
+can_modify = (user_pass == ADMIN_PASSWORD)
+
+if can_modify:
+    st.sidebar.success("✅ Authorized to modify Live UVs")
+else:
+    st.sidebar.warning("⚠️ Read-only mode. Enter password to unlock deployment actions.")
 
 # ---------------- Load Master List ----------------
 try:
@@ -21,188 +46,173 @@ except Exception as e:
     st.error(f"Error loading MASTER_LIST.csv: {e}")
     st.stop()
 
-# ---------------- Database Connection ----------------
-try:
-    conn = config.get_db_connection()
-    cursor = conn.cursor(cursor_factory=config.psycopg2.extras.RealDictCursor)
-except Exception as e:
-    st.error(f"Failed to connect to cloud database: {e}")
-    st.stop()
+st.title("🛡️ UV Gallery Manager")
+st.markdown("Manage Live UVs, Pending deployments, and Archives. Ensures 1:1 parity with your MASTER_LIST.")
 
-# ---------------- Session State ----------------
-if "validated_files" not in st.session_state:
-    st.session_state.validated_files = set()
+# ---------------- Fetch DB Records ----------------
+cursor.execute("""
+    SELECT b.id, b.batch_name, b.status, b.notes, b.created_at, s.file_path as storage_key, s.hash
+    FROM batches b
+    LEFT JOIN stitched_phashes s ON b.id = s.batch_id
+    WHERE b.status IN ('validated', 'deployed', 'archived')
+    ORDER BY b.created_at DESC
+""")
+all_records = cursor.fetchall()
 
-# ---------------- Helpers ----------------
-def validate_image(image_bytes, name):
+# Group records by Master Name
+grouped_records = {name: {'live': None, 'pending': [], 'archived': []} for name in MASTER_FILES}
+for rec in all_records:
+    name = rec['batch_name']
+    if name not in grouped_records:
+        continue # Stray batch name not in master list
+        
+    if rec['status'] == 'deployed':
+        grouped_records[name]['live'] = rec
+    elif rec['status'] == 'validated':
+        grouped_records[name]['pending'].append(rec)
+    elif rec['status'] == 'archived':
+        grouped_records[name]['archived'].append(rec)
+
+# ---------------- Helper Functions ----------------
+@st.cache_data(show_spinner=False, max_entries=50)
+def get_uv_preview(storage_key):
+    if not storage_key: return None
     try:
-        img = Image.open(io.BytesIO(image_bytes))
-        img.verify()
-        img = Image.open(io.BytesIO(image_bytes))
-        if img.size == (2048, 2048):
-            return True, "Valid (2048x2048)"
-        else:
-            return False, f"Invalid Size: {img.size}"
-    except Exception as e:
-        return False, f"Corrupt or Invalid: {e}"
-
-@st.cache_data(show_spinner=False)
-def get_uv_preview(image_bytes):
-    try:
-        img = Image.open(io.BytesIO(image_bytes))
-        img.thumbnail((400, 400))
+        data = config.supabase_storage_client.storage.from_("uv_maps").download(storage_key)
+        img = Image.open(io.BytesIO(data))
+        img.thumbnail((300, 300))
         return img
     except:
         return None
 
-def get_local_uv_preview(filename):
-    path = Path("Gallery UVs") / filename
-    if path.exists():
-        try:
-            img = Image.open(path)
-            img.thumbnail((400, 400))
-            return img
-        except:
-            return None
-    return None
-
-# ---------------- Data Loading ----------------
-with st.spinner("Checking cloud storage..."):
+def perform_deployment(target_name, new_batch, old_batch):
+    """Handles downloading, archiving, db updates, and git push."""
+    uv_dir = Path("Gallery UVs")
+    uv_dir.mkdir(exist_ok=True)
+    archive_dir = uv_dir / "Archive"
+    archive_dir.mkdir(exist_ok=True)
+    
+    filename = f"{target_name}.png"
+    local_path = uv_dir / filename
+    
+    # 1. Archive the old file if it exists locally
+    if local_path.exists() and old_batch:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        old_hash = old_batch['hash'][:8] if old_batch['hash'] else "unk"
+        archive_path = archive_dir / f"{target_name}_{timestamp}_{old_hash}.png"
+        shutil.copy2(local_path, archive_path)
+    
+    # 2. Download new version from Supabase
     try:
-        cloud_files = config.supabase_storage_client.storage.from_("uv_maps").list()
-        cloud_filenames = [f['name'] for f in cloud_files if f['name'].endswith(".png")]
+        image_data = config.supabase_storage_client.storage.from_("uv_maps").download(new_batch['storage_key'])
+        local_path.write_bytes(image_data)
     except Exception as e:
-        st.error(f"Error listing cloud files: {e}")
-        st.stop()
-
-# ---------------- Sidebar / Safety Toggle ----------------
-with st.sidebar:
-    st.title("🔒 Safety Controls")
-    dry_run = st.toggle("Dry Run Mode (Prevents GitHub Push)", value=True, help="Disable this to allow actual deployment to GitHub.")
+        st.error(f"Failed to download from Supabase: {e}")
+        return False
+        
+    # 3. Update Database
+    cursor.execute("UPDATE batches SET status = 'archived' WHERE batch_name = %s AND status = 'deployed'", (target_name,))
+    cursor.execute("UPDATE batches SET status = 'deployed' WHERE id = %s", (new_batch['id'],))
+    conn.commit()
     
-    st.divider()
-    st.subheader("Utilities")
-    if st.button("Clear Preview Caches"):
-        st.cache_data.clear()
-        st.success("Caches cleared!")
-        st.rerun()
-
-# ---------------- Audit & Comparison ----------------
-st.subheader("Master List Audit & Comparison")
-st.write("Compare the newly stitched UV maps (Cloud) with the current production versions (Local/GitHub).")
-
-for filename in MASTER_FILES:
-    status = "Present" if filename in cloud_filenames else "Missing"
-    
-    with st.expander(f"{filename} - {status}", expanded=(status == "Present")):
-        col1, col2 = st.columns(2)
+    # 4. Git Push
+    try:
+        repo_root = config.ROOT_DIR
         
-        with col1:
-            st.write("**New (Cloud)**")
-            if status == "Present":
-                try:
-                    image_data = config.supabase_storage_client.storage.from_("uv_maps").download(filename)
-                    cloud_prev = get_uv_preview(image_data)
-                    if cloud_prev:
-                        st.image(cloud_prev, width="stretch")
-                    else:
-                        st.error("Failed to render cloud preview")
-                except:
-                    st.error("Download failed")
-            else:
-                st.info("No new version prepared.")
-        
-        with col2:
-            st.write("**Current (Repository)**")
-            local_prev = get_local_uv_preview(filename)
-            if local_prev:
-                st.image(local_prev, width="stretch")
-            else:
-                st.info("No existing version found in repository.")
-        
-        # Audit Toggle
-        validated = filename in st.session_state.validated_files
-        if st.checkbox("Ready to Replace/Keep", key=f"audit_{filename}", value=validated):
-            st.session_state.validated_files.add(filename)
-        elif validated:
-            st.session_state.validated_files.remove(filename)
-
-# ---------------- Deployment ----------------
-st.divider()
-st.subheader("Archive & Deploy to GitHub")
-
-# Logic: Deployment is allowed if all files in MASTER_FILES are audited.
-all_audited = all(f in st.session_state.validated_files for f in MASTER_FILES)
-
-if not all_audited:
-    st.warning(f"Cannot deploy: {len(MASTER_FILES) - len(st.session_state.validated_files)} files still need to be audited.")
-else:
-    if dry_run:
-        st.info("ℹ️ **Dry Run Active:** The deploy button will perform a mock run (logging only). Disable 'Dry Run Mode' in the sidebar to push for real.")
-    else:
-        st.success("🎉 All files audited! Ready for archiving and GitHub deployment.")
-    
-    if st.button("🚀 Archive Locals & Push to GitHub", type="primary"):
-        to_replace = [f for f in st.session_state.validated_files if f in cloud_filenames]
-        
-        if dry_run:
-            st.code(f"MOCK RUN: Would archive {len(to_replace)} local files and replace them in 'Gallery UVs', then push to Git:\n" + "\n".join(to_replace))
+        # Streamlit Cloud Authentication Setup
+        if "GITHUB_TOKEN" in st.secrets:
+            token = st.secrets["GITHUB_TOKEN"]
+            user = st.secrets.get("GITHUB_USER", "SAvvyyybbb")
+            repo = st.secrets.get("GITHUB_REPO", "LifeDrawingGallery")
+            git_helper.setup_git(repo_root, token, user, repo)
+            
+        git_helper.git_add(repo_root)
+        committed = git_helper.git_commit(repo_root, f"Automated Update: {target_name} via UI")
+        if committed:
+            git_helper.git_push(repo_root)
+            st.success(f"Successfully deployed {target_name} and pushed to GitHub!")
+            st.balloons()
         else:
-            with st.spinner(f"Archiving old versions and downloading {len(to_replace)} new UV maps..."):
-                try:
-                    uv_dir = Path("Gallery UVs")
-                    uv_dir.mkdir(exist_ok=True)
-                    
-                    archive_dir = uv_dir / "Archive"
-                    archive_dir.mkdir(exist_ok=True)
-                    
-                    for filename in to_replace:
-                        local_path = uv_dir / filename
-                        
-                        # 1. Archive the existing file if it exists
-                        if local_path.exists():
-                            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                            archive_path = archive_dir / f"{local_path.stem}_{timestamp}{local_path.suffix}"
-                            shutil.copy2(local_path, archive_path)
-                            
-                        # 2. Download new version from Supabase
-                        image_data = config.supabase_storage_client.storage.from_("uv_maps").download(filename)
-                        local_path.write_bytes(image_data)
-                    
-                    st.success("Files downloaded and archived successfully.")
-                    
-                except Exception as e:
-                    st.error(f"Download or Archive failed: {e}")
-                    st.stop()
-                    
-            with st.spinner("Updating database tracker and pushing changes to GitHub..."):
-                try:
-                    conn = config.get_db_connection()
-                    cursor = conn.cursor()
-                    
-                    for filename in to_replace:
-                        batch_name_target = Path(filename).stem
-                        
-                        # 1. Archive previously deployed batch of this name
-                        cursor.execute("UPDATE batches SET status = 'archived' WHERE batch_name = %s AND status = 'deployed'", (batch_name_target,))
-                        
-                        # 2. Promote the newly validated batch to deployed
-                        cursor.execute("UPDATE batches SET status = 'deployed' WHERE batch_name = %s AND status = 'validated'", (batch_name_target,))
-                    
+            st.info(f"{target_name} updated locally/DB, but no changes detected for Git.")
+        return True
+    except Exception as e:
+        st.error(f"Git Push failed: {e}")
+        return False
+
+# ---------------- UI Render ----------------
+st.divider()
+
+for target_name in MASTER_FILES:
+    data = grouped_records[target_name]
+    live = data['live']
+    pending = data['pending']
+    archived = data['archived']
+    
+    status_emoji = "🟢" if live else ("🟡" if pending else "🔴")
+    
+    with st.expander(f"{status_emoji} {target_name} (Live: {'Yes' if live else 'No'} | Archives: {len(archived)})", expanded=(live is None)):
+        col_live, col_pend, col_arch = st.columns(3)
+        
+        # LIVE TRAY
+        with col_live:
+            st.subheader("🌟 Live Tray")
+            if live:
+                st.caption(f"Batch ID: {live['id']} | Date: {live['created_at'].strftime('%Y-%m-%d')}")
+                st.image(get_uv_preview(live['storage_key']), use_container_width=True)
+                
+                notes = st.text_area("Notes (Live)", value=live.get('notes', ''), key=f"note_l_{live['id']}")
+                if st.button("Save Notes", key=f"save_l_{live['id']}"):
+                    cursor.execute("UPDATE batches SET notes = %s WHERE id = %s", (notes, live['id']))
                     conn.commit()
+                    st.success("Notes saved.")
+            else:
+                st.error("Missing! No live image for this slot.")
+
+        # PENDING TRAY
+        with col_pend:
+            st.subheader("⏳ Pending Deployments")
+            if not pending:
+                st.info("No newly validated batches.")
+            for p in pending:
+                st.markdown(f"**Batch {p['id']}** ({p['created_at'].strftime('%Y-%m-%d')})")
+                st.image(get_uv_preview(p['storage_key']), use_container_width=True)
+                
+                # Notes
+                p_notes = st.text_area("Notes", value=p.get('notes', ''), key=f"note_p_{p['id']}", height=68)
+                if st.button("Save Note", key=f"save_p_{p['id']}"):
+                    cursor.execute("UPDATE batches SET notes = %s WHERE id = %s", (p_notes, p['id']))
+                    conn.commit()
+                
+                # Action
+                if st.button("🚀 Push to Live", key=f"push_{p['id']}", disabled=not can_modify, type="primary"):
+                    with st.spinner("Processing..."):
+                        if perform_deployment(target_name, p, live):
+                            st.rerun()
+
+        # ARCHIVE TRAY
+        with col_arch:
+            st.subheader("📚 Archive Tray")
+            if not archived:
+                st.info("No archives.")
+            
+            if archived:
+                arch_opts = {a['id']: f"ID: {a['id']} - {a['created_at'].strftime('%Y-%m-%d')}" for a in archived}
+                selected_arch_id = st.selectbox("Select Archive to View/Restore:", options=list(arch_opts.keys()), format_func=lambda x: arch_opts[x], key=f"sel_arch_{target_name}")
+                
+                selected_arch = next((a for a in archived if a['id'] == selected_arch_id), None)
+                if selected_arch:
+                    st.image(get_uv_preview(selected_arch['storage_key']), use_container_width=True)
                     
-                    repo_root = config.ROOT_DIR
-                    git_helper.git_add(repo_root)
-                    
-                    # Commit and push
-                    committed = git_helper.git_commit(repo_root, f"Automated Deployment: {len(to_replace)} UV maps updated")
-                    if committed:
-                        git_helper.git_push(repo_root)
-                        st.success(f"Successfully deployed {len(to_replace)} files to GitHub!")
-                        st.balloons()
-                    else:
-                        st.info("No changes were detected by Git to push.")
-                except Exception as e:
-                    st.error(f"Database tracking or GitHub Deployment failed: {e}")
+                    # Notes
+                    a_notes = st.text_area("Archive Notes", value=selected_arch.get('notes', ''), key=f"note_a_{selected_arch['id']}", height=68)
+                    if st.button("Save Archive Note", key=f"save_a_{selected_arch['id']}"):
+                        cursor.execute("UPDATE batches SET notes = %s WHERE id = %s", (a_notes, selected_arch['id']))
+                        conn.commit()
+
+                    # Action
+                    if st.button("♻️ Restore to Live", key=f"rest_{selected_arch['id']}", disabled=not can_modify):
+                        with st.spinner("Restoring archive to live..."):
+                            if perform_deployment(target_name, selected_arch, live):
+                                st.rerun()
 
 conn.close()
