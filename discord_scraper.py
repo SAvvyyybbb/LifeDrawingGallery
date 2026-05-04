@@ -353,148 +353,176 @@ async def on_raw_reaction_add(payload):
 
     conn.close()
 
+# ---------------- Scraping Logic ----------------
+async def perform_scrape(interaction: discord.Interaction = None):
+    """Core scraping logic. If interaction is provided, send updates to Discord."""
+    conn = config.get_db_connection()
+    cursor = conn.cursor()
+    
+    print("[Config] Loading settings from database...")
+    cursor.execute("SELECT key, value FROM metadata")
+    meta_rows = cursor.fetchall()
+    meta_dict = {row[0]: row[1] for row in meta_rows}
+    
+    global CHANNEL_CATEGORIES, SEARCH_AFTER, TESTING_MODE, ACCEPT_EMOJI, DUPLICATE_EMOJI, VETO_EMOJI, TEST_MODE_NO_REACT
+    
+    if 'DISCORD_CHANNELS' in meta_dict:
+        try:
+            CHANNEL_CATEGORIES = {int(k): v for k, v in json.loads(meta_dict['DISCORD_CHANNELS']).items()}
+        except Exception as e:
+            print(f"[Warning] Failed to parse DISCORD_CHANNELS from DB: {e}.")
+            
+    if 'SEARCH_AFTER' in meta_dict:
+        try:
+            SEARCH_AFTER = datetime.fromisoformat(meta_dict['SEARCH_AFTER'].replace('Z', '+00:00'))
+        except: pass
+        
+    TESTING_MODE = meta_dict.get('TESTING_MODE', 'true').lower() == 'true'
+    TEST_MODE_NO_REACT = meta_dict.get('TEST_MODE_NO_REACT', 'false').lower() == 'true'
+    ACCEPT_EMOJI = meta_dict.get('ACCEPT_EMOJI', ACCEPT_EMOJI)
+    DUPLICATE_EMOJI = meta_dict.get('DUPLICATE_EMOJI', DUPLICATE_EMOJI)
+    VETO_EMOJI = meta_dict.get('VETO_EMOJI', VETO_EMOJI)
+    
+    msg = f"[Config] Loaded {len(CHANNEL_CATEGORIES)} channels. Testing Mode: {TESTING_MODE}"
+    print(msg)
+    if interaction: await interaction.followup.send(f"🕵️ **Scraping Started**\n{msg}", ephemeral=True)
+
+    phash_cache = PhashCache(cursor)
+    total_new_images = 0
+    
+    async with aiohttp.ClientSession() as session:
+        for channel_id, category_name in CHANNEL_CATEGORIES.items():
+            try:
+                channel = await bot.fetch_channel(channel_id)
+            except discord.NotFound:
+                err_msg = f"[ERROR] Channel/Thread '{category_name}' ({channel_id}) not found. Skipping..."
+                print(err_msg)
+                if interaction: await interaction.followup.send(err_msg, ephemeral=True)
+                continue
+            except discord.Forbidden:
+                err_msg = f"[ERROR] Forbidden from accessing '{category_name}' ({channel_id}). Skipping..."
+                print(err_msg)
+                if interaction: await interaction.followup.send(err_msg, ephemeral=True)
+                continue
+            except Exception as e:
+                err_msg = f"[ERROR] Unexpected error fetching '{category_name}' ({channel_id}): {e}"
+                print(err_msg)
+                if interaction: await interaction.followup.send(err_msg, ephemeral=True)
+                continue
+            
+            print(f"[Scraper] Processing channel '{category_name}' ({channel_id})...")
+            last_message_id = get_last_message_id(cursor, channel_id)
+            after = discord.Object(id=last_message_id) if last_message_id else SEARCH_AFTER
+            
+            try:
+                async for msg_obj in channel.history(limit=None, oldest_first=True, after=after, before=SEARCH_BEFORE):
+                    message_saved = False
+                    message_duplicated = False
+                    
+                    for att in msg_obj.attachments:
+                        if not (
+                            att.content_type and att.content_type.startswith("image") and
+                            att.filename.lower().endswith((".png", ".jpg", ".jpeg"))
+                        ):
+                            continue
+
+                        data = None
+                        for _ in range(DOWNLOAD_RETRIES):
+                            try:
+                                async with session.get(att.url) as r:
+                                    if r.status == 200:
+                                        data = await r.read()
+                                        break
+                            except Exception as e:
+                                print(f"Download attempt failed: {e}")
+                                await asyncio.sleep(0.5)
+                        if data is None: continue
+
+                        img_hash = sha256_bytes(data)
+                        cursor.execute("SELECT 1 FROM raw_image_data WHERE hash=%s OR modified_hash=%s", (img_hash, img_hash))
+                        if cursor.fetchone(): continue
+                        
+                        try:
+                            image = Image.open(io.BytesIO(data))
+                            img_phash = imagehash.phash(image)
+                        except Exception as e:
+                            print(f"Failed to process image for phash: {e}")
+                            continue
+
+                        if phash_cache.is_duplicate(img_phash):
+                            print(f"[Duplicate] Image found for message ID {msg_obj.id}")
+                            message_duplicated = True
+                            continue
+
+                        ext = normalize_extension(os.path.splitext(att.filename)[1] or ".png")
+                        local_file_path = RAW_DIR / f"{img_hash}{ext}"
+                        local_file_path.write_bytes(data)
+
+                        storage_key = config.upload_to_supabase(local_file_path, bucket_name="raw_images")
+
+                        if storage_key:
+                            cursor.execute("""
+                                INSERT INTO raw_image_data (
+                                    hash, phash, poster_id, poster_name,
+                                    message_id, channel_id, original_filename, created_at, 
+                                    processing, batched, veto, modified_hash, storage_key_raw, content_category
+                                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 0, 0, 0, %s, %s, %s)
+                            """, (
+                                img_hash, str(img_phash),
+                                msg_obj.author.id, str(msg_obj.author),
+                                msg_obj.id, msg_obj.channel.id, att.filename,
+                                datetime.now(timezone.utc),
+                                None, storage_key, category_name
+                            ))
+                            phash_cache.add(img_phash, img_hash)
+                            message_saved = True
+                            total_new_images += 1
+                            try: local_file_path.unlink()
+                            except: pass
+                        else:
+                            print(f"Failed to upload to Supabase.")
+
+                    if not TESTING_MODE and not TEST_MODE_NO_REACT:
+                        try:
+                            if message_saved: await msg_obj.add_reaction(ACCEPT_EMOJI)
+                            elif message_duplicated: await msg_obj.add_reaction(DUPLICATE_EMOJI)
+                        except: pass
+                    
+                    if BATCH_COMMIT_SIZE > 0 and total_new_images % BATCH_COMMIT_SIZE == 0:
+                        conn.commit()
+
+                    set_last_message_id(cursor, conn, channel_id, msg_obj.id)
+            except Exception as e:
+                print(f"[Warning] Error in channel '{category_name}': {e}")
+                continue
+
+    conn.commit()
+    conn.close()
+    
+    result_msg = f"[Scraper] Done. New images: {total_new_images}."
+    print(result_msg)
+    if interaction: await interaction.followup.send(f"✅ **Scraping Complete!** Found `{total_new_images}` new images.", ephemeral=True)
+
+# ---------------- Slash Commands ----------------
+@bot.tree.command(name="scrape_now", description="Admin only: Manually trigger the scraper to fetch new images from tracked channels.")
+@app_commands.default_permissions(administrator=True)
+async def scrape_now(interaction: discord.Interaction):
+    """Manually trigger the scraper process. Restricted to admins."""
+    await interaction.response.defer(ephemeral=True)
+    try:
+        await perform_scrape(interaction)
+    except Exception as e:
+        await interaction.followup.send(f"❌ **Scraping Failed:** {e}", ephemeral=True)
+        traceback.print_exc()
+
 # ---------------- Main Logic ----------------
 async def main_logic():
     try:
         await bot.wait_until_ready()
+        await perform_scrape(None)
         
-        conn = config.get_db_connection()
-        cursor = conn.cursor()
-        
-        print("[Config] Loading settings from database...")
-        cursor.execute("SELECT key, value FROM metadata")
-        meta_rows = cursor.fetchall()
-        meta_dict = {row[0]: row[1] for row in meta_rows}
-        
-        global CHANNEL_CATEGORIES, SEARCH_AFTER, TESTING_MODE, ACCEPT_EMOJI, DUPLICATE_EMOJI, VETO_EMOJI, TEST_MODE_NO_REACT
-        
-        if 'DISCORD_CHANNELS' in meta_dict:
-            try:
-                CHANNEL_CATEGORIES = {int(k): v for k, v in json.loads(meta_dict['DISCORD_CHANNELS']).items()}
-            except Exception as e:
-                print(f"[Warning] Failed to parse DISCORD_CHANNELS from DB: {e}.")
-                
-        if 'SEARCH_AFTER' in meta_dict:
-            try:
-                SEARCH_AFTER = datetime.fromisoformat(meta_dict['SEARCH_AFTER'].replace('Z', '+00:00'))
-            except: pass
-            
-        TESTING_MODE = meta_dict.get('TESTING_MODE', 'true').lower() == 'true'
-        TEST_MODE_NO_REACT = meta_dict.get('TEST_MODE_NO_REACT', 'false').lower() == 'true'
-        ACCEPT_EMOJI = meta_dict.get('ACCEPT_EMOJI', ACCEPT_EMOJI)
-        DUPLICATE_EMOJI = meta_dict.get('DUPLICATE_EMOJI', DUPLICATE_EMOJI)
-        VETO_EMOJI = meta_dict.get('VETO_EMOJI', VETO_EMOJI)
-        
-        print(f"[Config] Loaded {len(CHANNEL_CATEGORIES)} channels. Testing Mode: {TESTING_MODE}")
-
-        phash_cache = PhashCache(cursor)
-        total_new_images = 0
-        
-        async with aiohttp.ClientSession() as session:
-            for channel_id, category_name in CHANNEL_CATEGORIES.items():
-                try:
-                    channel = await bot.fetch_channel(channel_id)
-                except discord.NotFound:
-                    print(f"[ERROR] Channel/Thread '{category_name}' ({channel_id}) not found. Skipping...")
-                    continue
-                except discord.Forbidden:
-                    print(f"[ERROR] Forbidden from accessing '{category_name}' ({channel_id}). Skipping...")
-                    continue
-                except Exception as e:
-                    print(f"[ERROR] Unexpected error fetching '{category_name}' ({channel_id}): {e}")
-                    continue
-                
-                print(f"[Scraper] Processing channel '{category_name}' ({channel_id})...")
-                last_message_id = get_last_message_id(cursor, channel_id)
-                after = discord.Object(id=last_message_id) if last_message_id else SEARCH_AFTER
-                
-                try:
-                    async for msg in channel.history(limit=None, oldest_first=True, after=after, before=SEARCH_BEFORE):
-                        message_saved = False
-                        message_duplicated = False
-                        
-                        for att in msg.attachments:
-                            if not (
-                                att.content_type and att.content_type.startswith("image") and
-                                att.filename.lower().endswith((".png", ".jpg", ".jpeg"))
-                            ):
-                                continue
-
-                            data = None
-                            for _ in range(DOWNLOAD_RETRIES):
-                                try:
-                                    async with session.get(att.url) as r:
-                                        if r.status == 200:
-                                            data = await r.read()
-                                            break
-                                except Exception as e:
-                                    print(f"Download attempt failed: {e}")
-                                    await asyncio.sleep(0.5)
-                            if data is None: continue
-
-                            img_hash = sha256_bytes(data)
-                            cursor.execute("SELECT 1 FROM raw_image_data WHERE hash=%s OR modified_hash=%s", (img_hash, img_hash))
-                            if cursor.fetchone(): continue
-                            
-                            try:
-                                image = Image.open(io.BytesIO(data))
-                                img_phash = imagehash.phash(image)
-                            except Exception as e:
-                                print(f"Failed to process image for phash: {e}")
-                                continue
-
-                            if phash_cache.is_duplicate(img_phash):
-                                print(f"[Duplicate] Image found for message ID {msg.id}")
-                                message_duplicated = True
-                                continue
-
-                            ext = normalize_extension(os.path.splitext(att.filename)[1] or ".png")
-                            local_file_path = RAW_DIR / f"{img_hash}{ext}"
-                            local_file_path.write_bytes(data)
-
-                            storage_key = config.upload_to_supabase(local_file_path, bucket_name="raw_images")
-
-                            if storage_key:
-                                cursor.execute("""
-                                    INSERT INTO raw_image_data (
-                                        hash, phash, poster_id, poster_name,
-                                        message_id, channel_id, original_filename, created_at, 
-                                        processing, batched, veto, modified_hash, storage_key_raw, content_category
-                                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 0, 0, 0, %s, %s, %s)
-                                """, (
-                                    img_hash, str(img_phash),
-                                    msg.author.id, str(msg.author),
-                                    msg.id, msg.channel.id, att.filename,
-                                    datetime.now(timezone.utc),
-                                    None, storage_key, category_name
-                                ))
-                                phash_cache.add(img_phash, img_hash)
-                                message_saved = True
-                                total_new_images += 1
-                                try: local_file_path.unlink()
-                                except: pass
-                            else:
-                                print(f"Failed to upload to Supabase.")
-
-                        if not TESTING_MODE and not TEST_MODE_NO_REACT:
-                            try:
-                                if message_saved: await msg.add_reaction(ACCEPT_EMOJI)
-                                elif message_duplicated: await msg.add_reaction(DUPLICATE_EMOJI)
-                            except: pass
-                        
-                        if BATCH_COMMIT_SIZE > 0 and total_new_images % BATCH_COMMIT_SIZE == 0:
-                            conn.commit()
-
-                        set_last_message_id(cursor, conn, channel_id, msg.id)
-                except Exception as e:
-                    print(f"[Warning] Error in channel '{category_name}': {e}")
-                    continue
-
-        conn.commit()
-        conn.close()
-        print(f"[Scraper] Done. New images: {total_new_images}.")
+        # Keep background task alive
         while True: await asyncio.sleep(3600)
-
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
         traceback.print_exc()
