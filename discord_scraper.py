@@ -1,9 +1,12 @@
-# discord_scraper_test.py
+# discord_scraper.py
 import discord
+from discord.ext import commands
+from discord import app_commands
 import aiohttp
 import os
 import hashlib
-import sqlite3
+import psycopg2
+from psycopg2.extras import RealDictCursor
 from datetime import datetime, timezone
 from pathlib import Path
 import traceback
@@ -13,26 +16,23 @@ import imagehash
 import io
 import config
 
+import json
+
 # ---------------- Configuration ----------------
-TESTING_MODE = getattr(config, "TESTING_MODE", True)
-TEST_MODE_NO_REACT = getattr(config, "TEST_MODE_NO_REACT", 1)  # 1 = skip reactions, 0 = normal
-TOKEN = getattr(config, "TOKEN", "")
-CHANNEL_ID = getattr(config, "CHANNEL_ID", 0)
+TOKEN = config.TOKEN
+RAW_DIR = config.RAW_DIR 
+DOWNLOAD_RETRIES = config.DOWNLOAD_RETRIES
+BATCH_COMMIT_SIZE = config.BATCH_COMMIT_SIZE
 
-RAW_DIR = config.RAW_DIR  # 1_Raw folder
-DB_PATH = config.DB_DIR / "image_data.db"  # unified DB
-
-DOWNLOAD_RETRIES = getattr(config, "DOWNLOAD_RETRIES", 2)
-BATCH_COMMIT_SIZE = getattr(config, "BATCH_COMMIT_SIZE", 10)
-
-ACCEPT_EMOJI = getattr(config, "ACCEPT_EMOJI", "✅")
-DUPLICATE_EMOJI = getattr(config, "DUPLICATE_EMOJI", "⚠️")
-INVALID_EMOJI = getattr(config, "INVALID_EMOJI", "❌")
-
-# ---------------- Search Range ----------------
-# Only download messages from Feb 1, 2026 onward
-SEARCH_AFTER = datetime(2026, 2, 1, tzinfo=timezone.utc)
-SEARCH_BEFORE = None  # Up to now
+TESTING_MODE = config.TESTING_MODE
+CHANNEL_CATEGORIES = config.CHANNEL_CATEGORIES
+ACCEPT_EMOJI = config.ACCEPT_EMOJI
+DUPLICATE_EMOJI = config.DUPLICATE_EMOJI
+VETO_EMOJI = config.VETO_EMOJI
+INVALID_EMOJI = config.INVALID_EMOJI
+SEARCH_AFTER = config.SEARCH_AFTER.replace(tzinfo=timezone.utc)
+SEARCH_BEFORE = None
+TEST_MODE_NO_REACT = False # Fallback
 
 # ---------------- Helpers ----------------
 def sha256_bytes(data: bytes) -> str:
@@ -42,81 +42,26 @@ def normalize_extension(ext: str) -> str:
     ext = ext.lower()
     return ".jpg" if ext == ".jpeg" else ext
 
-def init_db():
-    """Ensure DB exists and tables are created."""
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-
-    # raw images table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS raw_image_data (
-            hash TEXT PRIMARY KEY,
-            modified_hash TEXT,
-            phash TEXT,
-            poster_id INTEGER,
-            poster_name TEXT,
-            message_id INTEGER,
-            channel_id INTEGER,
-            original_filename TEXT,
-            created_at TEXT,
-            processing INTEGER DEFAULT 0,
-            batched INTEGER DEFAULT 0
-        )
-    """)
-
-    # processed images table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS processed_image_data (
-            hash TEXT PRIMARY KEY,
-            phash TEXT,
-            original_hash TEXT,
-            original_filename TEXT,
-            category TEXT,
-            width INTEGER,
-            height INTEGER,
-            created_at TEXT
-        )
-    """)
-
-    # metadata table
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS metadata (
-            key TEXT PRIMARY KEY,
-            value TEXT
-        )
-    """)
-
-    conn.commit()
-    return conn, cursor
-
-def get_last_message_id(cursor):
-    if cursor is None:
-        return None
-    cursor.execute("SELECT value FROM metadata WHERE key='last_message_id'")
+def get_last_message_id(cursor, channel_id):
+    cursor.execute("SELECT value FROM metadata WHERE key=%s", (f'last_message_id_{channel_id}',))
     row = cursor.fetchone()
     return int(row[0]) if row else None
 
-def set_last_message_id(cursor, conn, message_id):
-    if cursor is None:
-        return
+def set_last_message_id(cursor, conn, channel_id, message_id):
     cursor.execute(
-        "INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)",
-        ('last_message_id', str(message_id))
+        "INSERT INTO metadata (key, value) VALUES (%s, %s) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
+        (f'last_message_id_{channel_id}', str(message_id))
     )
     conn.commit()
 
 class PhashCache:
     def __init__(self, cursor):
         self.cache = []
-        if cursor is None:
-            print("[Cache] No DB loaded.")
-            return
         cursor.execute("SELECT hash, phash FROM raw_image_data")
         for row in cursor.fetchall():
             if row[1]:
                 self.cache.append((row[0], imagehash.hex_to_hash(row[1])))
-        print(f"[Cache] Loaded {len(self.cache)} phashes from DB.")
+        print(f"[Cache] Loaded {len(self.cache)} phashes from Cloud DB.")
 
     def is_duplicate(self, img_phash):
         for _, existing_phash in self.cache:
@@ -127,153 +72,361 @@ class PhashCache:
     def add(self, img_phash, img_hash=None):
         self.cache.append((img_hash, img_phash))
 
-def get_search_range(last_message_id):
-    after = SEARCH_AFTER or datetime(1970,1,1, tzinfo=timezone.utc)
-    before = SEARCH_BEFORE or datetime.now(timezone.utc)
-    after_object = discord.Object(id=last_message_id) if last_message_id else None
-    return after_object or after, before
+# ---------------- Bot Setup ----------------
+class GalleryBot(commands.Bot):
+    def __init__(self):
+        intents = discord.Intents.default()
+        intents.message_content = True
+        intents.guilds = True
+        intents.reactions = True
+        super().__init__(command_prefix="!", intents=intents)
 
-# ---------------- Discord Client ----------------
-intents = discord.Intents.default()
-intents.message_content = True
-intents.guilds = True  # required to fetch channel
-client = discord.Client(intents=intents)
+    async def setup_hook(self):
+        # Sync slash commands
+        await self.tree.sync()
+        print(f"[Bot] Tree synced.")
+
+bot = GalleryBot()
+
+# ---------------- Interaction Components ----------------
+class SubmissionsView(discord.ui.View):
+    def __init__(self, user_id, items):
+        super().__init__(timeout=300)
+        self.user_id = user_id
+        self.all_items = items
+        self.current_page = 0
+        self.items_per_page = 4
+        self.filter_channel = "All"
+        
+        # Get unique channels
+        self.channels = ["All"] + sorted(list(set(i['content_category'] for i in items if i.get('content_category'))))
+        
+        self.build_ui()
+
+    def get_filtered_items(self):
+        if self.filter_channel == "All":
+            return self.all_items
+        return [i for i in self.all_items if i.get('content_category') == self.filter_channel]
+
+    def build_ui(self):
+        self.clear_items()
+        filtered = self.get_filtered_items()
+        max_pages = max(1, (len(filtered) + self.items_per_page - 1) // self.items_per_page)
+        self.current_page = min(self.current_page, max_pages - 1)
+        
+        page_items = filtered[self.current_page * self.items_per_page : (self.current_page + 1) * self.items_per_page]
+
+        # 1. Channel Filter (Row 0)
+        if len(self.channels) > 1:
+            options = [discord.SelectOption(label=c, default=(c == self.filter_channel)) for c in self.channels[:25]]
+            select_channel = discord.ui.Select(placeholder="Filter by Channel...", options=options, row=0)
+            
+            async def channel_cb(interaction: discord.Interaction):
+                self.filter_channel = select_channel.values[0]
+                self.current_page = 0
+                self.build_ui()
+                await interaction.response.edit_message(embeds=self.get_embeds(), view=self)
+            
+            select_channel.callback = channel_cb
+            self.add_item(select_channel)
+            
+        # 2. Veto Multi-Select (Row 1)
+        if page_items:
+            veto_options = []
+            for idx, item in enumerate(page_items):
+                status = "🔴 Vetoed" if item['veto'] else "🟢 Active"
+                name = item['original_filename'] or "Unknown"
+                veto_options.append(discord.SelectOption(
+                    label=f"{idx+1}. {name[:50]}", 
+                    description=f"Status: {status}", 
+                    value=item['hash']
+                ))
+                
+            select_veto = discord.ui.Select(
+                placeholder="Toggle Veto status for images on this page...", 
+                min_values=1, 
+                max_values=len(veto_options), 
+                options=veto_options, 
+                row=1
+            )
+            
+            async def veto_cb(interaction: discord.Interaction):
+                selected_hashes = select_veto.values
+                conn = config.get_db_connection()
+                cursor = conn.cursor()
+                for item in self.all_items:
+                    if item['hash'] in selected_hashes:
+                        new_veto = 0 if item['veto'] else 1
+                        item['veto'] = new_veto
+                        cursor.execute("UPDATE raw_image_data SET veto = %s WHERE hash = %s", (new_veto, item['hash']))
+                conn.commit()
+                conn.close()
+                self.build_ui()
+                await interaction.response.edit_message(embeds=self.get_embeds(), view=self)
+                
+            select_veto.callback = veto_cb
+            self.add_item(select_veto)
+
+        # 3. Nav Buttons (Row 2)
+        prev_btn = discord.ui.Button(label="◀ Prev", style=discord.ButtonStyle.gray, disabled=(self.current_page == 0), row=2)
+        async def prev_cb(interaction: discord.Interaction):
+            self.current_page -= 1
+            self.build_ui()
+            await interaction.response.edit_message(embeds=self.get_embeds(), view=self)
+        prev_btn.callback = prev_cb
+        self.add_item(prev_btn)
+        
+        page_indicator = discord.ui.Button(label=f"Page {self.current_page + 1} / {max_pages} ({len(filtered)} items)", style=discord.ButtonStyle.blurple, disabled=True, row=2)
+        self.add_item(page_indicator)
+
+        next_btn = discord.ui.Button(label="Next ▶", style=discord.ButtonStyle.gray, disabled=(self.current_page == max_pages - 1), row=2)
+        async def next_cb(interaction: discord.Interaction):
+            self.current_page += 1
+            self.build_ui()
+            await interaction.response.edit_message(embeds=self.get_embeds(), view=self)
+        next_btn.callback = next_cb
+        self.add_item(next_btn)
+
+    def get_embeds(self):
+        filtered = self.get_filtered_items()
+        page_items = filtered[self.current_page * self.items_per_page : (self.current_page + 1) * self.items_per_page]
+        
+        if not page_items:
+            return [discord.Embed(title="No images found", description="Try selecting a different channel filter.", color=discord.Color.red())]
+            
+        embeds = []
+        base_url = config.SUPABASE_URL
+        
+        for idx, item in enumerate(page_items):
+            image_url = f"{base_url}/storage/v1/object/public/raw_images/{item['storage_key_raw']}"
+            color = discord.Color.red() if item['veto'] else discord.Color.green()
+            category = item.get('content_category') or 'Unknown'
+            
+            embed = discord.Embed(
+                title=f"{idx+1}. {item['original_filename']}",
+                description=f"**Channel:** {category}\n**Status:** {'🔴 VETOED' if item['veto'] else '🟢 ACTIVE'}",
+                color=color
+            )
+            embed.set_image(url=image_url)
+            embeds.append(embed)
+            
+        return embeds
+
+@bot.tree.command(name="my_submissions", description="View your submitted artworks, filter by channel, and veto them if needed.")
+async def my_submissions(interaction: discord.Interaction):
+    """Fetch user submissions and show a paginated view with multiple images."""
+    await interaction.response.defer(ephemeral=True)
+    
+    conn = config.get_db_connection()
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    
+    # Increased limit to 200 to give them a healthy backlog to filter through
+    cursor.execute("""
+        SELECT hash, storage_key_raw, original_filename, veto, content_category 
+        FROM raw_image_data 
+        WHERE poster_id = %s 
+        ORDER BY created_at DESC 
+        LIMIT 200
+    """, (interaction.user.id,))
+    
+    items = cursor.fetchall()
+    conn.close()
+    
+    if not items:
+        await interaction.followup.send("You haven't submitted any images yet (or none have been scraped since the cutoff).", ephemeral=True)
+        return
+        
+    view = SubmissionsView(interaction.user.id, items)
+    await interaction.followup.send(embeds=view.get_embeds(), view=view, ephemeral=True)
+
+# ---------------- Reaction Handling ----------------
+@bot.event
+async def on_raw_reaction_add(payload):
+    """Listen for the veto emoji and update the DB."""
+    if str(payload.emoji) != VETO_EMOJI: return
+    if payload.user_id == bot.user.id: return
+
+    conn = config.get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT poster_id, hash, batched FROM raw_image_data WHERE message_id = %s", (payload.message_id,))
+    row = cursor.fetchone()
+    
+    if row and payload.user_id == row[0] and row[2] != 1: 
+        img_hash = row[1]
+        print(f"[Veto] User {payload.user_id} vetoed image {img_hash} (Message: {payload.message_id})")
+        cursor.execute("UPDATE raw_image_data SET veto = 1 WHERE message_id = %s", (payload.message_id,))
+        conn.commit()
+        
+        try:
+            channel = bot.get_channel(payload.channel_id)
+            message = await channel.fetch_message(payload.message_id)
+            try: await message.remove_reaction(ACCEPT_EMOJI, bot.user)
+            except: pass
+            await message.add_reaction("⛔")
+        except Exception as e: print(f"[Veto] Could not update reactions: {e}")
+    conn.close()
 
 # ---------------- Main Logic ----------------
 async def main_logic():
     try:
-        await client.wait_until_ready()
-        print(f"[Bot] Logged in as {client.user}")
+        await bot.wait_until_ready()
+        
+        conn = config.get_db_connection()
+        cursor = conn.cursor()
+        
+        print("[Config] Loading settings from database...")
+        cursor.execute("SELECT key, value FROM metadata")
+        meta_rows = cursor.fetchall()
+        meta_dict = {row[0]: row[1] for row in meta_rows}
+        
+        global CHANNEL_CATEGORIES, SEARCH_AFTER, TESTING_MODE, ACCEPT_EMOJI, DUPLICATE_EMOJI, VETO_EMOJI, TEST_MODE_NO_REACT
+        
+        if 'DISCORD_CHANNELS' in meta_dict:
+            try:
+                CHANNEL_CATEGORIES = {int(k): v for k, v in json.loads(meta_dict['DISCORD_CHANNELS']).items()}
+            except Exception as e:
+                print(f"[Warning] Failed to parse DISCORD_CHANNELS from DB: {e}.")
+                
+        if 'SEARCH_AFTER' in meta_dict:
+            try:
+                SEARCH_AFTER = datetime.fromisoformat(meta_dict['SEARCH_AFTER'].replace('Z', '+00:00'))
+            except: pass
+            
+        TESTING_MODE = meta_dict.get('TESTING_MODE', 'true').lower() == 'true'
+        TEST_MODE_NO_REACT = meta_dict.get('TEST_MODE_NO_REACT', 'false').lower() == 'true'
+        ACCEPT_EMOJI = meta_dict.get('ACCEPT_EMOJI', ACCEPT_EMOJI)
+        DUPLICATE_EMOJI = meta_dict.get('DUPLICATE_EMOJI', DUPLICATE_EMOJI)
+        VETO_EMOJI = meta_dict.get('VETO_EMOJI', VETO_EMOJI)
+        
+        print(f"[Config] Loaded {len(CHANNEL_CATEGORIES)} channels. Testing Mode: {TESTING_MODE}")
 
-        RAW_DIR.mkdir(parents=True, exist_ok=True)
-
-        conn, cursor = init_db()
         phash_cache = PhashCache(cursor)
-        last_message_id = get_last_message_id(cursor)
-        after, before = get_search_range(last_message_id)
-
-        total_messages = total_images = total_duplicates = total_invalid = 0
-        batch_commit_count = 0
-
-        # ---------------- Get channel ----------------
-        channel = client.get_channel(CHANNEL_ID)
-        if not channel:
-            print(f"[ERROR] Channel ID {CHANNEL_ID} not found or bot lacks access.")
-            return
-
+        total_new_images = 0
+        
         async with aiohttp.ClientSession() as session:
-            async for msg in channel.history(limit=None, oldest_first=True, after=after, before=before):
-                msg_time = msg.created_at
-                if isinstance(after, datetime) and msg_time < after:
+            for channel_id, category_name in CHANNEL_CATEGORIES.items():
+                try:
+                    channel = await bot.fetch_channel(channel_id)
+                except discord.NotFound:
+                    print(f"[ERROR] Channel/Thread '{category_name}' ({channel_id}) not found. Skipping...")
                     continue
+                except discord.Forbidden:
+                    print(f"[ERROR] Forbidden from accessing '{category_name}' ({channel_id}). Skipping...")
+                    continue
+                except Exception as e:
+                    print(f"[ERROR] Unexpected error fetching '{category_name}' ({channel_id}): {e}")
+                    continue
+                
+                print(f"[Scraper] Processing channel '{category_name}' ({channel_id})...")
+                last_message_id = get_last_message_id(cursor, channel_id)
+                after = discord.Object(id=last_message_id) if last_message_id else SEARCH_AFTER
+                
+                try:
+                    async for msg in channel.history(limit=None, oldest_first=True, after=after, before=SEARCH_BEFORE):
+                        message_saved = False
+                        message_duplicated = False
+                        
+                        for att in msg.attachments:
+                            if not (
+                                att.content_type and att.content_type.startswith("image") and
+                                att.filename.lower().endswith((".png", ".jpg", ".jpeg"))
+                            ):
+                                continue
 
-                total_messages += 1
-                message_saved = message_duplicated = message_invalid = False
+                            data = None
+                            for _ in range(DOWNLOAD_RETRIES):
+                                try:
+                                    async with session.get(att.url) as r:
+                                        if r.status == 200:
+                                            data = await r.read()
+                                            break
+                                except Exception as e:
+                                    print(f"Download attempt failed: {e}")
+                                    await asyncio.sleep(0.5)
+                            if data is None: continue
 
-                for att in msg.attachments:
-                    if not att.content_type or not att.content_type.startswith("image") or \
-                       not att.filename.lower().endswith((".png", ".jpg", ".jpeg")):
-                        message_invalid = True
-                        total_invalid += 1
-                        continue
+                            img_hash = sha256_bytes(data)
+                            cursor.execute("SELECT 1 FROM raw_image_data WHERE hash=%s OR modified_hash=%s", (img_hash, img_hash))
+                            if cursor.fetchone(): continue
+                            
+                            try:
+                                image = Image.open(io.BytesIO(data))
+                                img_phash = imagehash.phash(image)
+                            except Exception as e:
+                                print(f"Failed to process image for phash: {e}")
+                                continue
 
-                    data = None
-                    for _ in range(DOWNLOAD_RETRIES):
-                        try:
-                            async with session.get(att.url) as r:
-                                if r.status == 200:
-                                    data = await r.read()
-                                    break
-                        except Exception:
-                            await asyncio.sleep(0.5)
-                    if data is None:
-                        message_invalid = True
-                        total_invalid += 1
-                        continue
+                            if phash_cache.is_duplicate(img_phash):
+                                print(f"[Duplicate] Image found for message ID {msg.id}")
+                                message_duplicated = True
+                                continue
 
-                    img_hash = sha256_bytes(data)
-                    try:
-                        image = Image.open(io.BytesIO(data))
-                        img_phash = imagehash.phash(image)
-                    except Exception:
-                        message_invalid = True
-                        total_invalid += 1
-                        continue
+                            ext = normalize_extension(os.path.splitext(att.filename)[1] or ".png")
+                            local_file_path = RAW_DIR / f"{img_hash}{ext}"
+                            local_file_path.write_bytes(data)
 
-                    # Skip if already processed
-                    cursor.execute("SELECT processing FROM raw_image_data WHERE hash=?", (img_hash,))
-                    row = cursor.fetchone()
-                    if row and row[0] == 1:
-                        continue
+                            storage_key = config.upload_to_supabase(local_file_path, bucket_name="raw_images")
 
-                    # Duplicate check
-                    if phash_cache.is_duplicate(img_phash):
-                        message_duplicated = True
-                        total_duplicates += 1
-                        continue
+                            if storage_key:
+                                cursor.execute("""
+                                    INSERT INTO raw_image_data (
+                                        hash, phash, poster_id, poster_name,
+                                        message_id, channel_id, original_filename, created_at, 
+                                        processing, batched, veto, modified_hash, storage_key_raw, content_category
+                                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 0, 0, 0, %s, %s, %s)
+                                """, (
+                                    img_hash, str(img_phash),
+                                    msg.author.id, str(msg.author),
+                                    msg.id, msg.channel.id, att.filename,
+                                    datetime.now(timezone.utc),
+                                    None, storage_key, category_name
+                                ))
+                                phash_cache.add(img_phash, img_hash)
+                                message_saved = True
+                                total_new_images += 1
+                                try: local_file_path.unlink()
+                                except: pass
+                            else:
+                                print(f"Failed to upload to Supabase.")
 
-                    ext = normalize_extension(os.path.splitext(att.filename)[1] or ".img")
-                    filename = f"{img_hash}{ext}"
+                        if not TESTING_MODE and not TEST_MODE_NO_REACT:
+                            try:
+                                if message_saved: await msg.add_reaction(ACCEPT_EMOJI)
+                                elif message_duplicated: await msg.add_reaction(DUPLICATE_EMOJI)
+                            except: pass
+                        
+                        if BATCH_COMMIT_SIZE > 0 and total_new_images % BATCH_COMMIT_SIZE == 0:
+                            conn.commit()
 
-                    # Always write to RAW_DIR for dry run
-                    (RAW_DIR / filename).write_bytes(data)
-                    cursor.execute("""
-                        INSERT OR IGNORE INTO raw_image_data (
-                            hash, phash, poster_id, poster_name,
-                            message_id, channel_id, original_filename, created_at, processing, batched
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0)
-                    """, (
-                        img_hash, str(img_phash),
-                        msg.author.id, str(msg.author),
-                        msg.id, msg.channel.id, att.filename,
-                        datetime.now(timezone.utc).isoformat()
-                    ))
-
-                    phash_cache.add(img_phash, img_hash)
-                    message_saved = True
-                    total_images += 1
-                    batch_commit_count += 1
-
-                # Reactions skipped in dry run
-                if not TESTING_MODE and not TEST_MODE_NO_REACT:
-                    try:
-                        if message_saved:
-                            await msg.add_reaction(ACCEPT_EMOJI)
-                        elif message_duplicated:
-                            await msg.add_reaction(DUPLICATE_EMOJI)
-                        elif message_invalid:
-                            await msg.add_reaction(INVALID_EMOJI)
-                    except (discord.Forbidden, discord.HTTPException):
-                        pass
-
-                if not TESTING_MODE and batch_commit_count >= BATCH_COMMIT_SIZE:
-                    conn.commit()
-                    batch_commit_count = 0
-
-                set_last_message_id(cursor, conn, msg.id)
+                        set_last_message_id(cursor, conn, channel_id, msg.id)
+                except Exception as e:
+                    print(f"[Warning] Error in channel '{category_name}': {e}")
+                    continue
 
         conn.commit()
         conn.close()
+        print(f"[Scraper] Done. New images: {total_new_images}.")
+        while True: await asyncio.sleep(3600)
 
-        print(f"[Summary] Messages: {total_messages}, New: {total_images}, Duplicates: {total_duplicates}, Invalid: {total_invalid}")
-
-    except Exception:
-        print("An unexpected error occurred:")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
         traceback.print_exc()
 
 # ---------------- Entry Point ----------------
-@client.event
+@bot.event
 async def on_ready():
-    client.loop.create_task(main_logic())
+    print(f"[Bot] Logged in as {bot.user}")
+    bot.loop.create_task(main_logic())
 
 def run_bot():
     if not TOKEN:
         print("ERROR: Bot token is empty.")
         return
     try:
-        client.run(TOKEN)
-    except Exception:
-        traceback.print_exc()
+        bot.run(TOKEN)
+    except Exception as e:
+        print(f"Failed to run bot: {e}")
 
 if __name__ == "__main__":
     run_bot()

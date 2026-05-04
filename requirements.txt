@@ -13,3 +13,7 @@ pandas
 streamlit-cropper
 imagehash
 
+psycopg2-binary
+python-dotenv
+supabase
+Wand

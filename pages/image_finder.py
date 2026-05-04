@@ -2,9 +2,9 @@
 import streamlit as st
 from pathlib import Path
 from PIL import Image, ImageOps
-import sqlite3
-import imagehash
 import config
+from psycopg2.extras import RealDictCursor
+import pandas as pd
 
 # ---------------- Page Config ----------------
 st.set_page_config(
@@ -12,78 +12,122 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("LifeDrawingGallery — Image Finder")
-st.write("""
-Search your database for images by **SHA256 hash**, **phash**, **modified_hash**, or **original filename**.  
-The matching image (if found) will display along with its folder.
-""")
+st.title("🔍 Image Explorer")
+st.write("Browse and filter all images in the cloud database.")
 
-# ---------------- Helpers ----------------
-DB_PATH = config.DB_DIR / "image_data.db"
+# ---------------- Database Connection ----------------
+try:
+    conn = config.get_db_connection()
+    cursor = conn.cursor(cursor_factory=RealDictCursor)
+except Exception as e:
+    st.error(f"Failed to connect to cloud database: {e}")
+    st.stop()
 
-def init_db():
-    if not DB_PATH.exists():
-        st.error(f"Database not found at `{DB_PATH}`")
-        return None, None
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    return conn, cursor
+# ---------------- Caching ----------------
+@st.cache_data(show_spinner=False, ttl=600)
+def get_filter_options():
+    cursor.execute("SELECT DISTINCT poster_name FROM raw_image_data WHERE poster_name IS NOT NULL ORDER BY poster_name")
+    posters = [r['poster_name'] for r in cursor.fetchall()]
+    
+    cursor.execute("SELECT DISTINCT content_category FROM raw_image_data WHERE content_category IS NOT NULL ORDER BY content_category")
+    categories = [r['content_category'] for r in cursor.fetchall()]
+    
+    return posters, categories
 
-def find_images(cursor, query):
-    query_lower = query.lower()
-    # exact match for hash fields or filename
-    cursor.execute("""
-        SELECT hash, phash, modified_hash, poster_id, poster_name, message_id, channel_id, original_filename
-        FROM raw_image_data
-        WHERE
-            lower(hash)=? OR
-            lower(phash)=? OR
-            lower(modified_hash)=? OR
-            lower(original_filename)=?
-    """, (query_lower, query_lower, query_lower, query_lower))
-    return cursor.fetchall()
+posters, categories = get_filter_options()
 
-def display_image_from_filename(original_filename):
-    """Search all relevant folders for a file matching the original filename and display it."""
-    found = False
-    filename_lower = original_filename.lower()
-    for folder in [config.RAW_DIR, config.CLEANED_DIR, config.IMAGE_PROCESSING_DIR]:
-        for path in folder.rglob("*"):
-            if path.is_file() and path.name.lower() == filename_lower:
-                img = Image.open(path)
-                img = ImageOps.exif_transpose(img)
-                st.image(img, caption=f"{path.name} — {folder.name}", use_column_width=True)
-                st.write(f"Folder: `{folder}`")
-                found = True
-                break
-        if found:
-            break
-    if not found:
-        st.warning(f"Image file `{original_filename}` not found in any folder")
+# ---------------- Sidebar Filters ----------------
+with st.sidebar:
+    st.title("🎯 Filters")
+    
+    search_q = st.text_input("Search (Filename/Hash/User)", help="Partial matches allowed for filename and poster name.")
+    
+    sel_poster = st.selectbox("Filter by Submitter", ["All"] + posters)
+    sel_cat = st.selectbox("Filter by Category", ["All"] + categories)
+    
+    sel_status = st.selectbox("Status", ["All", "Never Batched", "In Pending Batch", "Stitched & Validated"])
+    
+    sel_veto = st.radio("Veto Status", ["Art Only", "Vetoed Only", "Both"])
 
-# ---------------- UI ----------------
-search_query = st.text_input("Enter SHA256 hash, phash, modified_hash, or original filename")
+# ---------------- Query Building ----------------
+query = """
+    SELECT 
+        r.hash, r.storage_key_raw, r.original_filename, r.poster_name, r.content_category, r.created_at, r.veto,
+        i.batch_id, b.status as batch_status, b.batch_name
+    FROM raw_image_data r
+    LEFT JOIN images i ON r.hash = i.hash
+    LEFT JOIN batches b ON i.batch_id = b.id
+    WHERE 1=1
+"""
+params = []
 
-if search_query:
-    conn, cursor = init_db()
-    if conn and cursor:
-        results = find_images(cursor, search_query)
-        if not results:
-            st.warning("No results found in database.")
-        else:
-            st.success(f"Found {len(results)} record(s) in database.")
-            for r in results:
-                st.markdown("---")
-                st.write(f"**Original Filename:** {r[7]}")
-                st.write(f"**Hash:** {r[0]}")
-                st.write(f"**Phash:** {r[1]}")
-                st.write(f"**Modified Hash:** {r[2]}")
-                st.write(f"**Poster ID:** {r[3]}")
-                st.write(f"**Poster Name:** {r[4]}")
-                st.write(f"**Message ID:** {r[5]}")
-                st.write(f"**Channel ID:** {r[6]}")
+if search_q:
+    query += " AND (lower(r.original_filename) LIKE %s OR lower(r.hash) LIKE %s OR lower(r.poster_name) LIKE %s)"
+    search_param = f"%{search_q.lower()}%"
+    params.extend([search_param, search_param, search_param])
 
-                # Display image from folders by original filename
-                display_image_from_filename(r[7])
+if sel_poster != "All":
+    query += " AND r.poster_name = %s"
+    params.append(sel_poster)
 
-        conn.close()
+if sel_cat != "All":
+    query += " AND r.content_category = %s"
+    params.append(sel_cat)
+
+if sel_veto == "Art Only":
+    query += " AND r.veto = 0"
+elif sel_veto == "Vetoed Only":
+    query += " AND r.veto = 1"
+
+if sel_status == "Never Batched":
+    query += " AND i.id IS NULL"
+elif sel_status == "In Pending Batch":
+    query += " AND i.id IS NOT NULL AND (b.status != 'validated' OR b.status IS NULL)"
+elif sel_status == "Stitched & Validated":
+    query += " AND b.status = 'validated'"
+
+query += " ORDER BY r.created_at DESC LIMIT 200"
+
+cursor.execute(query, params)
+results = cursor.fetchall()
+
+# ---------------- UI Display ----------------
+st.subheader(f"Results ({len(results)} matches)")
+
+if not results:
+    st.info("No images match your current filters.")
+else:
+    # Display in a grid
+    cols = st.columns(4)
+    for i, r in enumerate(results):
+        with cols[i % 4]:
+            # Thumbnail Logic
+            # We'll try to find processed if available, otherwise raw
+            # But for search, raw is fine
+            image_url = f"{config.SUPABASE_URL}/storage/v1/object/public/raw_images/{r['storage_key_raw']}"
+            
+            # Use container for grouping
+            with st.container(border=True):
+                st.image(image_url, width="stretch")
+                
+                name = r['original_filename'] or "Untitled"
+                st.write(f"**{name[:25]}...**")
+                
+                # Badges
+                status_color = "green" if r['batch_status'] == 'validated' else ("blue" if r['batch_id'] else "orange")
+                status_text = "Stitched" if r['batch_status'] == 'validated' else ("Batched" if r['batch_id'] else "Unbatched")
+                
+                col1, col2 = st.columns(2)
+                col1.markdown(f":{status_color}[{status_text}]")
+                if r['veto']: col2.markdown(":red[VETOED]")
+                
+                st.caption(f"👤 {r['poster_name']}")
+                st.caption(f"📅 {r['created_at'].strftime('%Y-%m-%d')}")
+                
+                with st.expander("More Info"):
+                    st.write(f"**Category:** {r['content_category']}")
+                    st.write(f"**Hash:** `{r['hash'][:12]}...`")
+                    if r['batch_id']:
+                        st.write(f"**Batch:** {r['batch_name']} (ID: {r['batch_id']})")
+
+conn.close()
