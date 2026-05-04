@@ -9,6 +9,16 @@ from supabase import create_client, Client # Import Supabase client
 # Load environment variables from .env file
 load_dotenv()
 
+# Helper to grab from Streamlit secrets first, then OS environ
+def get_secret(key):
+    try:
+        import streamlit as st
+        if key in st.secrets:
+            return st.secrets[key]
+    except Exception:
+        pass
+    return os.getenv(key)
+
 # ---------------- Root Paths ----------------
 ROOT_DIR = Path(__file__).parent
 IMAGE_PROCESSING_DIR = ROOT_DIR / "Image Processing"
@@ -22,18 +32,17 @@ RAW_DIR.mkdir(parents=True, exist_ok=True)
 CLEANED_DIR.mkdir(parents=True, exist_ok=True)
 
 # ---------------- Database (Cloud) ----------------
-DB_URL = os.getenv("DB_URL")
+DB_URL = get_secret("DB_URL")
 
 def get_db_connection():
     """Returns a connection to the Supabase Postgres database."""
     if not DB_URL:
-        raise ValueError("DB_URL not found in .env file. Please set it up.")
+        raise ValueError("DB_URL not found in Streamlit secrets or .env file. Please set it up.")
     try:
         conn = psycopg2.connect(DB_URL)
         return conn
     except psycopg2.OperationalError as e:
         print(f"ERROR: Failed to connect to database: {e}")
-        print("Please check your DB_URL in .env and ensure Supabase is accessible.")
         raise
 
 # Legacy DB Path (kept for reference or local temp tasks)
@@ -42,8 +51,7 @@ DB_PATH = DB_DIR / "image_data.db"
 GALLERY_UVS_DIR = ROOT_DIR / "Gallery UVs"
 
 # ---------------- Token ----------------
-# Prefer TOKEN from .env, fallback to file
-TOKEN = os.getenv("DISCORD_TOKEN")
+TOKEN = get_secret("DISCORD_TOKEN")
 if not TOKEN:
     TOKEN_FILE = ROOT_DIR / ".gitignore" / "token.txt" # Keeping your old path logic
     TOKEN = TOKEN_FILE.read_text().strip() if TOKEN_FILE.exists() else ""
@@ -66,6 +74,9 @@ DEFAULT_POSITION = "01"
 
 # ---------------- Discord Bot Settings ----------------
 # Old single channel default removed, now using categories
+_gen_channel = get_secret("DISCORD_CHANNEL_ID")
+_gen_channel = int(_gen_channel) if _gen_channel else 1455106973052702770
+
 CHANNEL_CATEGORIES = {
     1057838318307524608: "Abstract",
     1057879266647343144: "Fan-Art",
@@ -73,7 +84,7 @@ CHANNEL_CATEGORIES = {
     1057838072638738492: "Portraits",
     1422792963439984642: "Still-Life",
     1343515047103827978: "Life-Drawing-Prompts",
-    int(os.getenv("DISCORD_CHANNEL_ID", 1455106973052702770)): "General"
+    _gen_channel: "General"
 }
 
 DOWNLOAD_RETRIES = 2
@@ -91,8 +102,9 @@ SEARCH_AFTER = datetime(2026, 2, 1, 0, 0, tzinfo=timezone.utc)
 SEARCH_BEFORE = None  # Up to now
 
 # ---------------- Supabase Storage Client ----------------
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
+SUPABASE_URL = get_secret("SUPABASE_URL")
+# Accept either ANON_KEY or service role KEY
+SUPABASE_ANON_KEY = get_secret("SUPABASE_ANON_KEY") or get_secret("SUPABASE_KEY")
 
 supabase_storage_client = None
 
