@@ -355,14 +355,10 @@ async def my_stats(interaction: discord.Interaction):
     
     embed = discord.Embed(title=f"📈 {interaction.user.display_name}'s Stats", color=discord.Color.green())
     embed.add_field(name="Total Submissions", value=f"**{total_submitted}** images", inline=True)
-    embed.add_field(name="Vetoed/Rejected", value=f"**{total_vetoed}** images", inline=True)
+    embed.add_field(name="Vetoed", value=f"**{total_vetoed}** images", inline=True)
     embed.add_field(name="Currently Live", value=f"**{live_count}** artworks", inline=True)
     embed.add_field(name="Archived/Past", value=f"**{archived_count}** artworks", inline=True)
-    
-    if total_submitted > 0:
-        approval_rate = int(((total_submitted - total_vetoed) / total_submitted) * 100)
-        embed.set_footer(text=f"Approval Rate: {approval_rate}%")
-        
+
     await interaction.followup.send(embed=embed)
 
 # ---------------- Reaction Handling ----------------

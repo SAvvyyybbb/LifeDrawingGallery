@@ -190,8 +190,12 @@ else:
 
         # Cropper
         rotated = image.rotate(angle, expand=True)
-        # Set realtime_update=False to drastically improve performance while dragging the crop box
-        cropped_img = st_cropper(rotated, realtime_update=False, aspect_ratio=aspect_map[ratio_choice], box_color="#FF0000")
+        box = st_cropper(rotated, realtime_update=False, aspect_ratio=aspect_map[ratio_choice], box_color="#FF0000", return_type='box')
+        left = box.get('left', 0)
+        top = box.get('top', 0)
+        width = box.get('width', rotated.width)
+        height = box.get('height', rotated.height)
+        cropped_img = rotated.crop((left, top, left + width, top + height))
 
         with col_ctrl:
             def do_save():
