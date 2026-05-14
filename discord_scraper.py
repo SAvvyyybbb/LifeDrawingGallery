@@ -92,13 +92,19 @@ def _db_fetch_showcase(user_id: str):
     conn = config.get_db_connection()
     try:
         cursor = conn.cursor(cursor_factory=RealDictCursor)
+        # DISTINCT ON keeps only the highest-priority status per image hash.
+        # Priority: deployed > archived, so the image is never double-counted
+        # when it appears in both a currently-live and a previously-archived batch.
         cursor.execute("""
-            SELECT b.batch_name, b.status, r.original_filename, b.created_at
+            SELECT DISTINCT ON (r.hash)
+                b.batch_name, b.status, r.original_filename, b.created_at
             FROM raw_image_data r
             JOIN images i ON r.hash = i.hash
             JOIN batches b ON i.batch_id = b.id
             WHERE r.poster_id = %s AND b.status IN ('deployed', 'archived')
-            ORDER BY b.created_at DESC
+            ORDER BY r.hash,
+                     CASE b.status WHEN 'deployed' THEN 0 ELSE 1 END,
+                     b.created_at DESC
         """, (user_id,))
         return list(cursor.fetchall())
     finally:
@@ -125,13 +131,22 @@ def _db_fetch_user_stats(user_id: str):
             (user_id,)
         )
         raw_stats = list(cursor.fetchall())
+        # Deduplicate by image hash before counting — same logic as _db_fetch_showcase.
+        # Without this, an image that cycled through deployed→archived→deployed
+        # would inflate both the live and archived counts.
         cursor.execute("""
-            SELECT b.status, count(*)
-            FROM raw_image_data r
-            JOIN images i ON r.hash = i.hash
-            JOIN batches b ON i.batch_id = b.id
-            WHERE r.poster_id = %s
-            GROUP BY b.status
+            SELECT status, count(*) FROM (
+                SELECT DISTINCT ON (r.hash)
+                    b.status
+                FROM raw_image_data r
+                JOIN images i ON r.hash = i.hash
+                JOIN batches b ON i.batch_id = b.id
+                WHERE r.poster_id = %s
+                ORDER BY r.hash,
+                         CASE b.status WHEN 'deployed' THEN 0 ELSE 1 END,
+                         b.created_at DESC
+            ) deduped
+            GROUP BY status
         """, (user_id,))
         batch_stats = list(cursor.fetchall())
         return raw_stats, batch_stats
