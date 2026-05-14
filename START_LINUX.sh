@@ -60,7 +60,7 @@ if [ ! -f "venv/bin/activate" ]; then
     python3 -m venv venv
     if [ ! -f "venv/bin/activate" ]; then
         echo "[ERROR] Failed to create virtual environment."
-        echo "Please try: sudo apt install python3-venv"
+        echo "Please try: sudo dnf install python3"
         exit 1
     fi
 fi

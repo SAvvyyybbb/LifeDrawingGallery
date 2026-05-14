@@ -2,7 +2,6 @@ streamlit
 gspread
 discord.py
 aiohttp
-asyncio
 nest_asyncio
 streamlit-autorefresh
 oauth2client

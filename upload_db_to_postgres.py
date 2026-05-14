@@ -8,7 +8,8 @@ from pathlib import Path
 load_dotenv()
 
 DB_URL = os.getenv("DB_URL")
-SQLITE_DB = "/home/savvy/Documents/Python Projects/LifeDrawingGallery/Image Processing/Databases/image_data.db"
+ROOT_DIR = Path(__file__).resolve().parent
+SQLITE_DB = ROOT_DIR / "Image Processing" / "Databases" / "image_data.db"
 
 def migrate():
     if not DB_URL or "[YOUR-PASSWORD]" in DB_URL:
