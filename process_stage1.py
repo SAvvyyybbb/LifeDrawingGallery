@@ -43,7 +43,7 @@ def run_processing():
 
     # Fetch DB records
     cursor.execute("""
-        SELECT hash, modified_hash, storage_key_raw, original_filename
+        SELECT hash, modified_hash, storage_key_raw, original_filename, needs_crop
         FROM raw_image_data
         WHERE processing = 0 AND veto = 0 AND storage_key_raw IS NOT NULL
     """)
@@ -65,6 +65,7 @@ def run_processing():
         active_hash = row[1] if row[1] else row[0]
         storage_key = row[2]
         filename = row[3] or f"{active_hash}.jpg"
+        was_manually_cropped = not row[4]  # needs_crop=0 means user already handled it
 
         print(f"Processing {filename}...")
 
@@ -101,12 +102,17 @@ def run_processing():
             y0, x0 = coords.min(axis=0)
             y1, x1 = coords.max(axis=0) + 1
             
-            # If the crop area is basically the whole image, consider it as "No Border Found"
+            # If the crop area is basically the whole image, no black border was found.
+            # Skip re-flagging if the user already manually cropped it — trust their edit.
             if (x1-x0 >= image.width*0.95 and y1-y0 >= image.height*0.95):
-                print(f"  No significant black border found, flagging for manual crop: {filename}")
-                cursor.execute("UPDATE raw_image_data SET needs_crop=1 WHERE hash=%s", (original_hash,))
-                conn.commit()
-                continue
+                if was_manually_cropped:
+                    print(f"  No border found but manually cropped — proceeding as-is: {filename}")
+                    y0, x0, y1, x1 = 0, 0, image.height, image.width
+                else:
+                    print(f"  No significant black border found, flagging for manual crop: {filename}")
+                    cursor.execute("UPDATE raw_image_data SET needs_crop=1 WHERE hash=%s", (original_hash,))
+                    conn.commit()
+                    continue
 
             cropped = image.crop((x0,y0,x1,y1))
 
