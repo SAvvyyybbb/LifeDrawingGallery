@@ -254,12 +254,12 @@ else:
 
             # Save Actions
             st.write("### 💾 Actions")
-            if st.button("💾 Save Current Image", type="primary", use_container_width=True, help="Save the cropped and rotated version, and stay on this image."):
+            if st.button("💾 Save Current Image", type="primary", width='stretch', help="Save the cropped and rotated version, and stay on this image."):
                 if do_save():
                     st.success("Saved!")
                     st.rerun()
 
-            if st.button("⏩ Save & Load Next", type="primary", use_container_width=True, help="Save changes and automatically jump to the next image in the queue."):
+            if st.button("⏩ Save & Load Next", type="primary", width='stretch', help="Save changes and automatically jump to the next image in the queue."):
                 if do_save():
                     if st.session_state.selected_idx < len(db_images)-1:
                         st.session_state.selected_idx += 1
@@ -267,7 +267,7 @@ else:
                         st.session_state.editor_mode = "grid"
                     st.rerun()
 
-            if st.button("🚫 Veto (Not Art)", type="secondary", use_container_width=True, help="Mark this image as invalid/not art so it won't be processed."):
+            if st.button("🚫 Veto (Not Art)", type="secondary", width='stretch', help="Mark this image as invalid/not art so it won't be processed."):
                 cursor.execute("UPDATE raw_image_data SET veto = 1 WHERE hash = %s", (original_hash,))
                 conn.commit()
                 st.success("Vetoed.")

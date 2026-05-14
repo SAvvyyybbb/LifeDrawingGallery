@@ -72,7 +72,7 @@ def run_home():
 
         with col_ctrl:
             st.subheader("⚙️ Management")
-            if st.button("Restart Discord Bot", use_container_width=True):
+            if st.button("Restart Discord Bot", width='stretch'):
                 import subprocess
                 import sys
                 with st.spinner("Restarting bot..."):
@@ -106,7 +106,7 @@ def run_home():
                         data = config.supabase_storage_client.storage.from_("cleaned_images").download(storage_key)
                         thumb = Image.open(io.BytesIO(data))
                         thumb.thumbnail((150, 150))
-                        st.image(thumb, caption=f"{category}", use_container_width=True)
+                        st.image(thumb, caption=f"{category}", width='stretch')
                     except:
                         pass
 

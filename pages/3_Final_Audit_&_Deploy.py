@@ -272,7 +272,7 @@ if uncommitted or unpushed:
                 st.write("**Committed but not yet pushed:**")
                 st.code(unpushed)
         if can_modify:
-            if st.button("🔄 Repair: Push to GitHub Now", type="primary", use_container_width=True):
+            if st.button("🔄 Repair: Push to GitHub Now", type="primary", width='stretch'):
                 with st.spinner("Pushing to GitHub..."):
                     if perform_push_only():
                         st.success("✅ Push successful! GitHub is now up to date.")
@@ -300,7 +300,7 @@ for target_name in MASTER_FILES:
                 st.caption(f"Batch ID: {live['id']} | Date: {live['timestamp'].strftime('%Y-%m-%d') if hasattr(live['timestamp'], 'strftime') else live['timestamp']}")
                 preview_img = get_uv_preview(live['storage_key'])
                 if preview_img:
-                    st.image(preview_img, use_container_width=True)
+                    st.image(preview_img, width='stretch')
                 else:
                     st.warning("Preview not available.")
                 
@@ -321,7 +321,7 @@ for target_name in MASTER_FILES:
                 if local_path.exists():
                     st.warning("⚠️ Unmanaged Legacy File")
                     st.caption("A file exists in your local Gallery UVs folder, but it is not currently tracked by the new database system. It will be automatically tracked when you deploy your first pending batch here.")
-                    st.image(str(local_path), use_container_width=True)
+                    st.image(str(local_path), width='stretch')
                 else:
                     st.error("Missing! No live image for this slot.")
 
@@ -334,7 +334,7 @@ for target_name in MASTER_FILES:
                 st.markdown(f"**Batch {p['id']}** ({p['timestamp'].strftime('%Y-%m-%d') if hasattr(p['timestamp'], 'strftime') else p['timestamp']})")
                 p_prev = get_uv_preview(p['storage_key'])
                 if p_prev:
-                    st.image(p_prev, use_container_width=True)
+                    st.image(p_prev, width='stretch')
                 else:
                     st.warning("Preview not available.")
                 
@@ -369,7 +369,7 @@ for target_name in MASTER_FILES:
                 if selected_arch:
                     a_prev = get_uv_preview(selected_arch['storage_key'])
                     if a_prev:
-                        st.image(a_prev, use_container_width=True)
+                        st.image(a_prev, width='stretch')
                     else:
                         st.warning("Preview not available.")
                     
