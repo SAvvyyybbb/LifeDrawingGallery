@@ -146,7 +146,15 @@ def _db_toggle_veto(hashes_to_toggle: list, all_items: list):
         for item in all_items:
             if item['hash'] in hashes_to_toggle:
                 new_veto = 0 if item['veto'] else 1
-                cursor.execute("UPDATE raw_image_data SET veto = %s WHERE hash = %s", (new_veto, item['hash']))
+                if new_veto == 0:
+                    # Un-veto: reset processing so the image re-enters the triage queue
+                    # regardless of how far through the pipeline it got before being vetoed
+                    cursor.execute(
+                        "UPDATE raw_image_data SET veto = 0, processing = 0 WHERE hash = %s",
+                        (item['hash'],)
+                    )
+                else:
+                    cursor.execute("UPDATE raw_image_data SET veto = 1 WHERE hash = %s", (item['hash'],))
                 updates[item['hash']] = new_veto
         conn.commit()
         return updates
