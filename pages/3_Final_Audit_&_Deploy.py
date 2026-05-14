@@ -355,13 +355,14 @@ for target_name in MASTER_FILES:
         # ARCHIVE TRAY
         with col_arch:
             st.subheader("📚 Archive Tray")
+
+            # --- DB-backed archives (full Supabase restore) ---
             if not archived:
-                st.info("No archives.")
-            
-            if archived:
+                st.info("No DB archives.")
+            else:
                 arch_opts = {a['id']: f"ID: {a['id']} - {(a['timestamp'].strftime('%Y-%m-%d') if hasattr(a['timestamp'], 'strftime') else a['timestamp'])}" for a in archived}
                 selected_arch_id = st.selectbox("Select Archive to View/Restore:", options=list(arch_opts.keys()), format_func=lambda x: arch_opts[x], key=f"sel_arch_{target_name}")
-                
+
                 selected_arch = next((a for a in archived if a['id'] == selected_arch_id), None)
                 if selected_arch:
                     a_prev = get_uv_preview(selected_arch['storage_key'])
@@ -369,17 +370,51 @@ for target_name in MASTER_FILES:
                         st.image(a_prev, width='stretch')
                     else:
                         st.warning("Preview not available.")
-                    
-                    # Notes
+
                     a_notes = st.text_area("Archive Notes", value=selected_arch.get('notes', ''), key=f"note_a_{selected_arch['id']}", height=68)
                     if st.button("Save Archive Note", key=f"save_a_{selected_arch['id']}"):
                         cursor.execute("UPDATE batches SET notes = %s WHERE id = %s", (a_notes, selected_arch['id']))
                         conn.commit()
 
-                    # Action
                     if st.button("♻️ Restore to Live", key=f"rest_{selected_arch['id']}", disabled=not can_modify):
                         with st.spinner("Restoring archive to live..."):
                             if perform_deployment(target_name, selected_arch, live):
                                 st.rerun()
+
+            # --- Filesystem archives (files saved by Re-sync, no DB record) ---
+            fs_archive_dir = Path("Gallery UVs") / "Archive"
+            fs_archives = sorted(fs_archive_dir.glob(f"{target_name}_*.png"), reverse=True) if fs_archive_dir.exists() else []
+            if fs_archives:
+                st.divider()
+                st.caption("📁 Filesystem Archives (from Re-sync / pre-DB)")
+                fs_opts = {str(p): p.name for p in fs_archives}
+                selected_fs = st.selectbox("Select file to restore:", options=list(fs_opts.keys()), format_func=lambda x: fs_opts[x], key=f"sel_fs_{target_name}")
+                if selected_fs:
+                    try:
+                        st.image(str(selected_fs), width='stretch')
+                    except Exception:
+                        st.warning("Preview not available.")
+                    if st.button("♻️ Restore this file to GitHub", key=f"fs_rest_{target_name}_{Path(selected_fs).stem}", disabled=not can_modify):
+                        with st.spinner("Restoring from filesystem archive..."):
+                            try:
+                                token = config.get_secret("GITHUB_TOKEN")
+                                if not token:
+                                    st.error("GITHUB_TOKEN not set.")
+                                else:
+                                    dest = Path("Gallery UVs") / f"{target_name}.png"
+                                    shutil.copy2(selected_fs, dest)
+                                    repo_root = config.ROOT_DIR
+                                    auth_url = git_helper.setup_git(repo_root, token)
+                                    git_helper.git_add(repo_root)
+                                    committed = git_helper.git_commit(repo_root, f"Restore filesystem archive: {Path(selected_fs).name}")
+                                    if committed:
+                                        git_helper.git_push(repo_root, auth_url)
+                                        st.success(f"✅ Restored `{Path(selected_fs).name}` to GitHub.")
+                                        st.warning("⚠️ DB still points to the previous Supabase UV. Use 'Push to Live' from the Pending tray to re-align if needed.")
+                                        st.rerun()
+                                    else:
+                                        st.info("File is already the current GitHub version — nothing to push.")
+                            except Exception as e:
+                                st.error(f"Restore failed: {e}")
 
 conn.close()
