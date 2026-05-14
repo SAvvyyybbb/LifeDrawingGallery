@@ -9,12 +9,31 @@ def run_cmd(cmd, cwd):
         raise Exception(f"Git Command Failed: {' '.join(cmd)}\n{result.stderr}")
     return result.stdout.strip()
 
-def setup_git(repo_dir: Path, token: str, user: str, repo: str):
-    """Configures the git remote and identity for Streamlit Cloud."""
-    url = f"https://{quote(user, safe='')}:{quote(token, safe='')}@github.com/{user}/{repo}.git"
-    run_cmd(["git", "remote", "set-url", "origin", url], cwd=repo_dir)
-    run_cmd(["git", "config", "user.name", "Gallery Bot"], cwd=repo_dir)
-    run_cmd(["git", "config", "user.email", "bot@lifedrawing.com"], cwd=repo_dir)
+def setup_git(repo_dir: Path, token: str, user: str = None, repo: str = None):
+    """Configures the git remote and identity for Streamlit Cloud.
+
+    Reads the existing remote URL and injects the token — avoids any
+    dependency on GITHUB_USER / GITHUB_REPO secrets, which can resolve
+    to unexpected values on Streamlit Cloud.
+    """
+    import re
+    result = subprocess.run(
+        ["git", "remote", "get-url", "origin"],
+        cwd=str(repo_dir), capture_output=True, text=True
+    )
+    existing = result.stdout.strip()
+
+    if existing:
+        # Strip any credentials already embedded in the URL
+        clean = re.sub(r'https://[^@]+@', 'https://', existing)
+    else:
+        # Fallback: build URL from explicit user/repo if remote isn't set
+        clean = f"https://github.com/{user}/{repo}.git"
+
+    auth_url = clean.replace('https://', f'https://x-access-token:{quote(token, safe="")}@', 1)
+    run_cmd(["git", "remote", "set-url", "origin", auth_url], cwd=str(repo_dir))
+    run_cmd(["git", "config", "user.name", "Gallery Bot"], cwd=str(repo_dir))
+    run_cmd(["git", "config", "user.email", "bot@lifedrawing.com"], cwd=str(repo_dir))
 
 def git_add(repo_dir: Path):
     # Strictly limit addition to Gallery UVs folder to prevent unexpected scope issues
