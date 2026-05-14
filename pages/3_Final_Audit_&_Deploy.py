@@ -394,27 +394,55 @@ for target_name in MASTER_FILES:
                         st.image(str(selected_fs), width='stretch')
                     except Exception:
                         st.warning("Preview not available.")
-                    if st.button("♻️ Restore this file to GitHub", key=f"fs_rest_{target_name}_{Path(selected_fs).stem}", disabled=not can_modify):
-                        with st.spinner("Restoring from filesystem archive..."):
+                    if st.button("♻️ Restore & Track in DB", key=f"fs_rest_{target_name}_{Path(selected_fs).stem}", disabled=not can_modify):
+                        with st.spinner("Uploading to Supabase and restoring..."):
                             try:
                                 token = config.get_secret("GITHUB_TOKEN")
                                 if not token:
                                     st.error("GITHUB_TOKEN not set.")
                                 else:
-                                    dest = Path("Gallery UVs") / f"{target_name}.png"
-                                    shutil.copy2(selected_fs, dest)
-                                    repo_root = config.ROOT_DIR
-                                    auth_url = git_helper.setup_git(repo_root, token)
-                                    git_helper.git_add(repo_root)
-                                    committed = git_helper.git_commit(repo_root, f"Restore filesystem archive: {Path(selected_fs).name}")
-                                    if committed:
-                                        git_helper.git_push(repo_root, auth_url)
-                                        st.success(f"✅ Restored `{Path(selected_fs).name}` to GitHub.")
-                                        st.warning("⚠️ DB still points to the previous Supabase UV. Use 'Push to Live' from the Pending tray to re-align if needed.")
-                                        st.rerun()
+                                    fs_path = Path(selected_fs)
+
+                                    # 1. Upload the archive file to Supabase so it has a permanent storage key
+                                    storage_key = config.upload_to_supabase(fs_path, "uv_maps")
+                                    if not storage_key:
+                                        st.error("Failed to upload to Supabase.")
                                     else:
-                                        st.info("File is already the current GitHub version — nothing to push.")
+                                        # 2. Archive the currently live batch in the DB
+                                        cursor.execute(
+                                            "UPDATE batches SET status = 'archived' WHERE batch_name = %s AND status = 'deployed'",
+                                            (target_name,)
+                                        )
+
+                                        # 3. Create a new batch record for the restored version
+                                        cursor.execute(
+                                            "INSERT INTO batches (batch_name, status, notes, timestamp) VALUES (%s, 'deployed', %s, NOW()) RETURNING id",
+                                            (target_name, f"Restored from filesystem archive: {fs_path.name}")
+                                        )
+                                        new_batch_id = cursor.fetchone()['id']
+
+                                        # 4. Link it to its Supabase file
+                                        import hashlib
+                                        file_hash = hashlib.sha256(fs_path.read_bytes()).hexdigest()
+                                        cursor.execute(
+                                            "INSERT INTO stitched_phashes (batch_id, file_path, hash) VALUES (%s, %s, %s)",
+                                            (new_batch_id, storage_key, file_hash)
+                                        )
+                                        conn.commit()
+
+                                        # 5. Copy to Gallery UVs and push to GitHub
+                                        dest = Path("Gallery UVs") / f"{target_name}.png"
+                                        shutil.copy2(fs_path, dest)
+                                        repo_root = config.ROOT_DIR
+                                        auth_url = git_helper.setup_git(repo_root, token)
+                                        git_helper.git_add(repo_root)
+                                        committed = git_helper.git_commit(repo_root, f"Restore: {target_name} from filesystem archive")
+                                        if committed:
+                                            git_helper.git_push(repo_root, auth_url)
+                                        st.success(f"✅ Restored and fully tracked. Previous live version is now in the DB Archive Tray.")
+                                        st.rerun()
                             except Exception as e:
+                                conn.rollback()
                                 st.error(f"Restore failed: {e}")
 
 conn.close()
