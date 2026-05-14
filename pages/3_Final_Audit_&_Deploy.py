@@ -170,7 +170,10 @@ def perform_repush(target_name, live_batch):
         repo_root = config.ROOT_DIR
         auth_url = git_helper.setup_git(repo_root, token)
         git_helper.git_add(repo_root)
-        git_helper.git_commit(repo_root, f"Re-sync: restore deployed UV for {target_name}")
+        committed = git_helper.git_commit(repo_root, f"Re-sync: restore deployed UV for {target_name}")
+        if not committed:
+            st.warning("⚠️ No file change detected — the GitHub file may already match the Supabase version. No push was made.")
+            return False
         git_helper.git_push(repo_root, auth_url)
         if archived_name:
             st.info(f"Previous GitHub file archived as `Gallery UVs/Archive/{archived_name}`")
