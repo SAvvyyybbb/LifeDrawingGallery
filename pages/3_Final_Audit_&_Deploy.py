@@ -6,6 +6,7 @@ from pathlib import Path
 import io
 import hmac
 import shutil
+import subprocess
 import git_helper
 from datetime import datetime
 
@@ -87,60 +88,144 @@ def get_uv_preview(storage_key):
     except:
         return None
 
-def perform_deployment(target_name, new_batch, old_batch):
-    """Handles downloading, archiving, db updates, and git push."""
-    uv_dir = Path("Gallery UVs")
-    uv_dir.mkdir(exist_ok=True)
-    archive_dir = uv_dir / "Archive"
-    archive_dir.mkdir(exist_ok=True)
-    
-    filename = f"{target_name}.png"
-    local_path = uv_dir / filename
-    
-    # 1. Archive the old file if it exists locally
-    if local_path.exists() and old_batch:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        old_hash = old_batch['hash'][:8] if old_batch['hash'] else "unk"
-        archive_path = archive_dir / f"{target_name}_{timestamp}_{old_hash}.png"
-        shutil.copy2(local_path, archive_path)
-    
-    # 2. Download new version from Supabase
+def get_git_sync_status():
+    """Return (uncommitted, unpushed) string summaries for Gallery UVs/."""
+    uncommitted, unpushed = "", ""
     try:
-        image_data = config.supabase_storage_client.storage.from_("uv_maps").download(new_batch['storage_key'])
-        local_path.write_bytes(image_data)
-    except Exception as e:
-        st.error(f"Failed to download from Supabase: {e}")
-        return False
-        
-    # 3. Update Database
-    cursor.execute("UPDATE batches SET status = 'archived' WHERE batch_name = %s AND status = 'deployed'", (target_name,))
-    cursor.execute("UPDATE batches SET status = 'deployed' WHERE id = %s", (new_batch['id'],))
-    conn.commit()
-    
-    # 4. Git Push
+        r = subprocess.run(
+            ["git", "status", "--porcelain", "Gallery UVs/"],
+            cwd=str(config.ROOT_DIR), capture_output=True, text=True
+        )
+        uncommitted = r.stdout.strip()
+    except Exception:
+        pass
     try:
-        repo_root = config.ROOT_DIR
+        r = subprocess.run(
+            ["git", "log", "--oneline", "origin/main..HEAD"],
+            cwd=str(config.ROOT_DIR), capture_output=True, text=True
+        )
+        unpushed = r.stdout.strip()
+    except Exception:
+        pass
+    return uncommitted, unpushed
+
+def perform_push_only():
+    """Stage, commit (if needed), and push Gallery UVs/ without touching the DB.
+    Used to recover from a previously failed push."""
+    try:
         token = config.get_secret("GITHUB_TOKEN")
         if not token:
-            st.error("GITHUB_TOKEN is not set in Streamlit secrets. Database updated but GitHub push skipped.")
-            return True
+            st.error("GITHUB_TOKEN is not set in Streamlit secrets.")
+            return False
+        repo_root = config.ROOT_DIR
         user = config.get_secret("GITHUB_USER") or "SAvvyyybbb"
         repo = config.get_secret("GITHUB_REPO") or "LifeDrawingGallery"
         git_helper.setup_git(repo_root, token, user, repo)
         git_helper.git_add(repo_root)
-        committed = git_helper.git_commit(repo_root, f"Automated Update: {target_name} via UI")
-        if committed:
-            git_helper.git_push(repo_root)
-            st.success(f"Successfully deployed {target_name} and pushed to GitHub!")
-            st.balloons()
-        else:
-            st.info(f"{target_name} updated locally/DB, but no changes detected for Git.")
+        git_helper.git_commit(repo_root, "Repair: push previously failed UV deployment")
+        git_helper.git_push(repo_root)  # always push — covers uncommitted AND already-committed-but-unpushed
         return True
     except Exception as e:
-        st.error(f"Git Push failed: {e}")
+        st.error(f"Push failed: {e}")
         return False
 
+def perform_deployment(target_name, new_batch, old_batch):
+    """Download → archive → replace local file → git push → DB update.
+
+    Git push happens BEFORE the DB is updated so that a push failure leaves
+    everything unchanged and clicking Push to Live again is safe (idempotent).
+    """
+    uv_dir = Path("Gallery UVs")
+    uv_dir.mkdir(exist_ok=True)
+    archive_dir = uv_dir / "Archive"
+    archive_dir.mkdir(exist_ok=True)
+
+    filename = f"{target_name}.png"
+    local_path = uv_dir / filename
+    temp_path = uv_dir / f".{target_name}_deploying.tmp"
+
+    # 1. Download new UV to a temp file — abort before touching anything if this fails
+    try:
+        image_data = config.supabase_storage_client.storage.from_("uv_maps").download(new_batch['storage_key'])
+        temp_path.write_bytes(image_data)
+    except Exception as e:
+        st.error(f"Failed to download from Supabase: {e}")
+        return False
+
+    # 2. Archive the current live file (best-effort, non-fatal)
+    if local_path.exists() and old_batch:
+        try:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            old_hash = old_batch['hash'][:8] if old_batch['hash'] else "unk"
+            archive_path = archive_dir / f"{target_name}_{timestamp}_{old_hash}.png"
+            shutil.copy2(local_path, archive_path)
+        except Exception as e:
+            st.warning(f"Could not archive old file (non-critical): {e}")
+
+    # 3. Atomically replace local file
+    temp_path.replace(local_path)
+
+    # 4. Git push — BEFORE updating the DB so a failure leaves DB unchanged
+    token = config.get_secret("GITHUB_TOKEN")
+    if not token:
+        st.error(
+            "GITHUB_TOKEN is not set. Local file has been saved but the database and GitHub "
+            "have **not** been updated. Add the secret and click Push to Live again to retry."
+        )
+        return False
+
+    try:
+        repo_root = config.ROOT_DIR
+        user = config.get_secret("GITHUB_USER") or "SAvvyyybbb"
+        repo = config.get_secret("GITHUB_REPO") or "LifeDrawingGallery"
+        git_helper.setup_git(repo_root, token, user, repo)
+        git_helper.git_add(repo_root)
+        git_helper.git_commit(repo_root, f"Deploy: {target_name}")
+        git_helper.git_push(repo_root)
+    except Exception as e:
+        st.error(
+            f"**Git push failed.** The local file is saved correctly but the database has not been "
+            f"updated. Click **Push to Live** again to retry — it is safe to do so.\n\n`{e}`"
+        )
+        return False
+
+    # 5. DB update — only reached after a confirmed successful push
+    cursor.execute(
+        "UPDATE batches SET status = 'archived' WHERE batch_name = %s AND status = 'deployed'",
+        (target_name,)
+    )
+    cursor.execute("UPDATE batches SET status = 'deployed' WHERE id = %s", (new_batch['id'],))
+    conn.commit()
+
+    st.success(f"✅ {target_name} deployed and pushed to GitHub!")
+    st.balloons()
+    return True
+
 # ---------------- UI Render ----------------
+
+# Sync status banner — catches any previous push failure immediately on page load
+uncommitted, unpushed = get_git_sync_status()
+if uncommitted or unpushed:
+    with st.container(border=True):
+        st.warning("⚠️ **GitHub out of sync** — local Gallery UVs differ from what's on GitHub.")
+        c1, c2 = st.columns(2)
+        with c1:
+            if uncommitted:
+                st.write("**Uncommitted local changes:**")
+                st.code(uncommitted)
+        with c2:
+            if unpushed:
+                st.write("**Committed but not yet pushed:**")
+                st.code(unpushed)
+        if can_modify:
+            if st.button("🔄 Repair: Push to GitHub Now", type="primary", use_container_width=True):
+                with st.spinner("Pushing to GitHub..."):
+                    if perform_push_only():
+                        st.success("✅ Push successful! GitHub is now up to date.")
+                        st.rerun()
+        else:
+            st.info("🔒 Enter the admin password in the sidebar to enable the repair push.")
+
 st.divider()
 
 for target_name in MASTER_FILES:
