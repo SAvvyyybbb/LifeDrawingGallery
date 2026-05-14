@@ -129,6 +129,60 @@ def perform_push_only():
         st.error(f"Push failed: {e}")
         return False
 
+def perform_repush(target_name, live_batch):
+    """Fix a DB/GitHub desync: archive the current GitHub file, re-download the
+    DB-deployed version from Supabase, and push both to GitHub.
+    Does NOT modify the database — use when the DB is correct but GitHub is not."""
+    uv_dir = Path("Gallery UVs")
+    uv_dir.mkdir(exist_ok=True)
+    archive_dir = uv_dir / "Archive"
+    archive_dir.mkdir(exist_ok=True)
+
+    filename = f"{target_name}.png"
+    local_path = uv_dir / filename
+    temp_path = uv_dir / f".{target_name}_repush.tmp"
+
+    # 1. Download the Supabase-deployed version to temp first
+    try:
+        image_data = config.supabase_storage_client.storage.from_("uv_maps").download(live_batch['storage_key'])
+        temp_path.write_bytes(image_data)
+    except Exception as e:
+        st.error(f"Failed to download deployed UV from Supabase: {e}")
+        return False
+
+    # 2. Archive whatever is currently on disk (= the current GitHub version)
+    archived_name = None
+    if local_path.exists():
+        try:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            archived_name = f"{target_name}_{timestamp}_pre-resync.png"
+            shutil.copy2(local_path, archive_dir / archived_name)
+        except Exception as e:
+            st.warning(f"Could not archive current file (non-critical): {e}")
+
+    # 3. Replace with Supabase version
+    temp_path.replace(local_path)
+
+    # 4. Push — includes both the updated UV and the newly archived copy
+    token = config.get_secret("GITHUB_TOKEN")
+    if not token:
+        st.error("GITHUB_TOKEN not set. Files written locally but not pushed.")
+        return False
+    try:
+        repo_root = config.ROOT_DIR
+        user = config.get_secret("GITHUB_USER") or "SAvvyyybbb"
+        repo = config.get_secret("GITHUB_REPO") or "LifeDrawingGallery"
+        git_helper.setup_git(repo_root, token, user, repo)
+        git_helper.git_add(repo_root)
+        git_helper.git_commit(repo_root, f"Re-sync: restore deployed UV for {target_name}")
+        git_helper.git_push(repo_root)
+        if archived_name:
+            st.info(f"Previous GitHub file archived as `Gallery UVs/Archive/{archived_name}`")
+        return True
+    except Exception as e:
+        st.error(f"Git push failed: {e}")
+        return False
+
 def perform_deployment(target_name, new_batch, old_batch):
     """Download → archive → replace local file → git push → DB update.
 
@@ -255,6 +309,13 @@ for target_name in MASTER_FILES:
                     cursor.execute("UPDATE batches SET notes = %s WHERE id = %s", (notes, live['id']))
                     conn.commit()
                     st.success("Notes saved.")
+
+                st.divider()
+                if st.button("🔄 Re-sync GitHub", key=f"resync_{live['id']}", disabled=not can_modify, help="Archives the current GitHub file, then re-downloads and pushes the Supabase-deployed version. Use when DB says deployed but GitHub has the wrong file."):
+                    with st.spinner("Re-syncing GitHub..."):
+                        if perform_repush(target_name, live):
+                            st.success(f"✅ GitHub re-synced for {target_name}!")
+                            st.rerun()
             else:
                 local_path = Path("Gallery UVs") / f"{target_name}.png"
                 if local_path.exists():
