@@ -1,6 +1,7 @@
 # Streamlit Home Page
 import streamlit as st
 import pandas as pd
+import io
 import config
 from PIL import Image
 from streamlit_autorefresh import st_autorefresh
@@ -17,22 +18,17 @@ def run_home():
         st.error(f"Failed to connect to cloud database: {e}")
         return
 
-    # ---------------- Fetch Metrics ----------------
-    # Total Scraped (Raw)
-    cursor.execute("SELECT COUNT(*) FROM raw_image_data WHERE veto = 0")
-    total_raw = cursor.fetchone()[0]
-
-    # Pending Stage 1
-    cursor.execute("SELECT COUNT(*) FROM raw_image_data WHERE veto = 0 AND processing = 0 AND storage_key_raw IS NOT NULL")
-    pending_processing = cursor.fetchone()[0]
-
-    # Total Cleaned
-    cursor.execute("SELECT COUNT(*) FROM processed_image_data")
-    total_cleaned = cursor.fetchone()[0]
-
-    # Batched / Stitched
-    cursor.execute("SELECT COUNT(*) FROM images WHERE is_stitched = 1")
-    total_stitched = cursor.fetchone()[0]
+    try:
+        # ---------------- Fetch Metrics (single round-trip) ----------------
+        cursor.execute("""
+            SELECT
+                (SELECT COUNT(*) FROM raw_image_data WHERE veto = 0) AS total_raw,
+                (SELECT COUNT(*) FROM raw_image_data WHERE veto = 0 AND processing = 0 AND storage_key_raw IS NOT NULL) AS pending_processing,
+                (SELECT COUNT(*) FROM processed_image_data) AS total_cleaned,
+                (SELECT COUNT(*) FROM images WHERE is_stitched = 1) AS total_stitched
+        """)
+        row = cursor.fetchone()
+        total_raw, pending_processing, total_cleaned, total_stitched = row
 
     # ---------------- UI Layout ----------------
     st.title("🎨 LifeDrawingGallery Manager")
@@ -116,7 +112,8 @@ def run_home():
                 except:
                     pass
 
-    conn.close()
+    finally:
+        conn.close()
 
 if __name__ == "__main__":
     st.set_page_config(page_title="LifeDrawingGallery Manager", layout="wide")

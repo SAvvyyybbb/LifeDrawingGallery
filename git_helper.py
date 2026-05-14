@@ -1,5 +1,6 @@
 import subprocess
 from pathlib import Path
+from urllib.parse import quote
 import os
 
 def run_cmd(cmd, cwd):
@@ -10,7 +11,7 @@ def run_cmd(cmd, cwd):
 
 def setup_git(repo_dir: Path, token: str, user: str, repo: str):
     """Configures the git remote and identity for Streamlit Cloud."""
-    url = f"https://{user}:{token}@github.com/{user}/{repo}.git"
+    url = f"https://{quote(user, safe='')}:{quote(token, safe='')}@github.com/{user}/{repo}.git"
     run_cmd(["git", "remote", "set-url", "origin", url], cwd=repo_dir)
     run_cmd(["git", "config", "user.name", "Gallery Bot"], cwd=repo_dir)
     run_cmd(["git", "config", "user.email", "bot@lifedrawing.com"], cwd=repo_dir)

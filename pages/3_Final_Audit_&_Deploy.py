@@ -4,6 +4,7 @@ from PIL import Image
 import config
 from pathlib import Path
 import io
+import hmac
 import shutil
 import git_helper
 from datetime import datetime
@@ -24,14 +25,13 @@ except Exception as e:
 
 # ---------------- Password Protection ----------------
 st.sidebar.title("🔒 Security")
-ADMIN_PASSWORD = "admin" # Fallback if not in secrets
-try:
-    if "ADMIN_PASSWORD" in st.secrets:
-        ADMIN_PASSWORD = st.secrets["ADMIN_PASSWORD"]
-except: pass
+ADMIN_PASSWORD = config.get_secret("ADMIN_PASSWORD")
+if not ADMIN_PASSWORD:
+    st.error("ADMIN_PASSWORD is not set in Streamlit secrets. Deployment actions are disabled.")
+    ADMIN_PASSWORD = ""
 
 user_pass = st.sidebar.text_input("Enter Admin Password to allow modifications", type="password")
-can_modify = (user_pass == ADMIN_PASSWORD)
+can_modify = bool(user_pass) and hmac.compare_digest(user_pass, ADMIN_PASSWORD)
 
 if user_pass == "":
     st.sidebar.info("🔒 Enter password to unlock deployment actions.")
@@ -120,14 +120,13 @@ def perform_deployment(target_name, new_batch, old_batch):
     # 4. Git Push
     try:
         repo_root = config.ROOT_DIR
-        
-        # Streamlit Cloud Authentication Setup
-        if "GITHUB_TOKEN" in st.secrets:
-            token = st.secrets["GITHUB_TOKEN"]
-            user = st.secrets.get("GITHUB_USER", "SAvvyyybbb")
-            repo = st.secrets.get("GITHUB_REPO", "LifeDrawingGallery")
-            git_helper.setup_git(repo_root, token, user, repo)
-            
+        token = config.get_secret("GITHUB_TOKEN")
+        if not token:
+            st.error("GITHUB_TOKEN is not set in Streamlit secrets. Database updated but GitHub push skipped.")
+            return True
+        user = config.get_secret("GITHUB_USER") or "SAvvyyybbb"
+        repo = config.get_secret("GITHUB_REPO") or "LifeDrawingGallery"
+        git_helper.setup_git(repo_root, token, user, repo)
         git_helper.git_add(repo_root)
         committed = git_helper.git_commit(repo_root, f"Automated Update: {target_name} via UI")
         if committed:
