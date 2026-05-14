@@ -218,14 +218,14 @@ if "batch_proposals" in st.session_state:
                             INSERT INTO images
                             (batch_id, file_path, aspect_category, manual_order, img_w, img_h, avg_r, avg_g, avg_b, perceptual_hash, hash)
                             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                            ON CONFLICT (file_path) 
-                            DO UPDATE SET 
+                            ON CONFLICT (file_path)
+                            DO UPDATE SET
                                 batch_id = EXCLUDED.batch_id,
                                 manual_order = EXCLUDED.manual_order,
                                 is_stitched = 0
-                        """, (batch_id, img['storage_key_processed'], img['category'], idx + 1, 
-                            img['width'], img['height'], img['avg_r'], img['avg_g'], img['avg_b'], 
-                            img['phash'], img['hash']))
+                        """, (batch_id, img['storage_key_processed'], img['category'], idx + 1,
+                            img['width'], img['height'], img['avg_r'], img['avg_g'], img['avg_b'],
+                            img['phash'], img['original_hash']))
                     saved_count += 1
                 
                 conn.commit()
