@@ -7,6 +7,7 @@ from streamlit_cropper import st_cropper
 import config
 import math
 import hashlib
+import io
 from datetime import datetime, timezone
 
 # ---------------- Page Config ----------------
@@ -37,6 +38,16 @@ def get_thumbnail(storage_key, size=(120, 120)):
             return img
         except:
             return None
+    return None
+
+@st.cache_data(show_spinner="Loading image...", max_entries=30)
+def get_image_bytes(storage_key):
+    """Cache raw file bytes — bytes serialise cheaply so cache hits avoid any disk I/O on reruns."""
+    local_path = config.RAW_DIR / storage_key
+    if not local_path.exists():
+        config.download_from_supabase(storage_key, config.RAW_DIR, "raw_images")
+    if local_path.exists():
+        return local_path.read_bytes()
     return None
 
 # ---------------- Helpers ----------------
@@ -158,14 +169,15 @@ else:
     original_hash = selected_row['hash']
     selected_storage_key = selected_row['storage_key_raw']
     
-    current_image_path = IMAGE_DIR / selected_storage_key
-    if not current_image_path.exists():
-        config.download_from_supabase(selected_storage_key, IMAGE_DIR, "raw_images")
+    img_bytes = get_image_bytes(selected_storage_key)
+    if not img_bytes:
+        st.error("Could not load image from storage.")
+        st.stop()
 
     col_main, col_ctrl = st.columns([3, 1])
 
     with col_main:
-        image = Image.open(current_image_path)
+        image = Image.open(io.BytesIO(img_bytes))
         
         # Header Info
         st.subheader(f"Editing: {selected_row['original_filename']}")
@@ -188,14 +200,33 @@ else:
             
             st.divider()
 
-        # Cropper
-        rotated = image.rotate(angle, expand=True)
-        box = st_cropper(rotated, realtime_update=False, aspect_ratio=aspect_map[ratio_choice], box_color="#FF0000", return_type='box')
+        # Scale down for the cropper display — reduces the base64 payload sent to the
+        # browser on every rerun (slider move, selectbox change, etc.).
+        # The actual save always crops the full-resolution image.
+        MAX_DISPLAY_PX = 1400
+        orig_w, orig_h = image.size
+        display_scale = min(1.0, MAX_DISPLAY_PX / max(orig_w, orig_h))
+        display_img = (
+            image.resize((int(orig_w * display_scale), int(orig_h * display_scale)), Image.LANCZOS)
+            if display_scale < 1.0 else image
+        )
+
+        rotated_display = display_img.rotate(angle, expand=True)
+        box = st_cropper(rotated_display, realtime_update=False, aspect_ratio=aspect_map[ratio_choice], box_color="#FF0000", return_type='box')
         left = box.get('left', 0)
         top = box.get('top', 0)
-        width = box.get('width', rotated.width)
-        height = box.get('height', rotated.height)
-        cropped_img = rotated.crop((left, top, left + width, top + height))
+        width = box.get('width', rotated_display.width)
+        height = box.get('height', rotated_display.height)
+
+        # Map box back to full-resolution coordinates
+        if display_scale < 1.0:
+            left  = int(left  / display_scale)
+            top   = int(top   / display_scale)
+            width = int(width / display_scale)
+            height = int(height / display_scale)
+
+        rotated_full = image.rotate(angle, expand=True)
+        cropped_img = rotated_full.crop((left, top, left + width, top + height))
 
         with col_ctrl:
             def do_save():
@@ -236,5 +267,10 @@ else:
                     st.session_state.editor_mode = "grid"
                 st.rerun()
 
-    conn.close()
+    # Preload adjacent images into cache so navigation feels instant
+    for preload_idx in (st.session_state.selected_idx + 1, st.session_state.selected_idx - 1):
+        if 0 <= preload_idx < len(db_images):
+            get_image_bytes(db_images[preload_idx]['storage_key_raw'])
+
+conn.close()
 
