@@ -118,12 +118,10 @@ def perform_push_only():
             st.error("GITHUB_TOKEN is not set in Streamlit secrets.")
             return False
         repo_root = config.ROOT_DIR
-        user = config.get_secret("GITHUB_USER") or "SAvvyyybbb"
-        repo = config.get_secret("GITHUB_REPO") or "LifeDrawingGallery"
-        git_helper.setup_git(repo_root, token, user, repo)
+        auth_url = git_helper.setup_git(repo_root, token)
         git_helper.git_add(repo_root)
         git_helper.git_commit(repo_root, "Repair: push previously failed UV deployment")
-        git_helper.git_push(repo_root)  # always push — covers uncommitted AND already-committed-but-unpushed
+        git_helper.git_push(repo_root, auth_url)
         return True
     except Exception as e:
         st.error(f"Push failed: {e}")
@@ -170,12 +168,10 @@ def perform_repush(target_name, live_batch):
         return False
     try:
         repo_root = config.ROOT_DIR
-        user = config.get_secret("GITHUB_USER") or "SAvvyyybbb"
-        repo = config.get_secret("GITHUB_REPO") or "LifeDrawingGallery"
-        git_helper.setup_git(repo_root, token, user, repo)
+        auth_url = git_helper.setup_git(repo_root, token)
         git_helper.git_add(repo_root)
         git_helper.git_commit(repo_root, f"Re-sync: restore deployed UV for {target_name}")
-        git_helper.git_push(repo_root)
+        git_helper.git_push(repo_root, auth_url)
         if archived_name:
             st.info(f"Previous GitHub file archived as `Gallery UVs/Archive/{archived_name}`")
         return True
@@ -230,12 +226,10 @@ def perform_deployment(target_name, new_batch, old_batch):
 
     try:
         repo_root = config.ROOT_DIR
-        user = config.get_secret("GITHUB_USER") or "SAvvyyybbb"
-        repo = config.get_secret("GITHUB_REPO") or "LifeDrawingGallery"
-        git_helper.setup_git(repo_root, token, user, repo)
+        auth_url = git_helper.setup_git(repo_root, token)
         git_helper.git_add(repo_root)
         git_helper.git_commit(repo_root, f"Deploy: {target_name}")
-        git_helper.git_push(repo_root)
+        git_helper.git_push(repo_root, auth_url)
     except Exception as e:
         st.error(
             f"**Git push failed.** The local file is saved correctly but the database has not been "
