@@ -2,7 +2,7 @@
 
 import streamlit as st
 from pathlib import Path
-from PIL import Image
+from PIL import Image, ImageOps
 from streamlit_cropper import st_cropper
 import config
 import math
@@ -177,7 +177,9 @@ else:
     col_main, col_ctrl = st.columns([3, 1])
 
     with col_main:
-        image = Image.open(io.BytesIO(img_bytes))
+        # exif_transpose bakes any EXIF rotation into the pixel data so the
+        # cropper display and the actual pixel coordinates always match
+        image = ImageOps.exif_transpose(Image.open(io.BytesIO(img_bytes)))
         
         # Header Info
         st.subheader(f"Editing: {selected_row['original_filename']}")
@@ -200,10 +202,11 @@ else:
             
             st.divider()
 
-        # Scale down for the cropper display — reduces the base64 payload sent to the
-        # browser on every rerun (slider move, selectbox change, etc.).
-        # The actual save always crops the full-resolution image.
-        MAX_DISPLAY_PX = 1400
+        # Pre-scale to 700px — this matches st_cropper's internal max exactly.
+        # Passing should_resize_image=False bypasses the library's own resize step,
+        # so the returned box coords are directly in the pre-scaled pixel space with
+        # no compounding scale factors to worry about.
+        MAX_DISPLAY_PX = 700
         orig_w, orig_h = image.size
         display_scale = min(1.0, MAX_DISPLAY_PX / max(orig_w, orig_h))
         display_img = (
@@ -212,17 +215,24 @@ else:
         )
 
         rotated_display = display_img.rotate(angle, expand=True)
-        box = st_cropper(rotated_display, realtime_update=False, aspect_ratio=aspect_map[ratio_choice], box_color="#FF0000", return_type='box')
+        box = st_cropper(
+            rotated_display,
+            realtime_update=False,
+            should_resize_image=False,
+            aspect_ratio=aspect_map[ratio_choice],
+            box_color="#FF0000",
+            return_type='box',
+        )
         left = box.get('left', 0)
         top = box.get('top', 0)
         width = box.get('width', rotated_display.width)
         height = box.get('height', rotated_display.height)
 
-        # Map box back to full-resolution coordinates
+        # Scale box back to full-resolution coordinates
         if display_scale < 1.0:
-            left  = int(left  / display_scale)
-            top   = int(top   / display_scale)
-            width = int(width / display_scale)
+            left   = int(left   / display_scale)
+            top    = int(top    / display_scale)
+            width  = int(width  / display_scale)
             height = int(height / display_scale)
 
         rotated_full = image.rotate(angle, expand=True)
