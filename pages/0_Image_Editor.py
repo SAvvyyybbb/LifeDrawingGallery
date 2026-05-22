@@ -215,18 +215,48 @@ else:
         )
 
         rotated_display = display_img.rotate(angle, expand=True)
+
+        # streamlit_cropper has two traps:
+        #   1. realtime_update=False requires the user to DOUBLE-CLICK the canvas
+        #      before the box coords reach Python; otherwise saves crop at the
+        #      library's default 20%-80% rect.
+        #   2. On every rerun, a JS useEffect re-applies the rect_* args back onto
+        #      the box, snapping it to whatever default_coords resolves to. We feed
+        #      the user's last box back in so the visible box and Python's coords
+        #      stay locked together. Keyed on (image, angle, aspect) so the box
+        #      resets when any of those change.
+        cropper_state_key = (selected_storage_key, angle, ratio_choice)
+        if st.session_state.get("cropper_state_key") != cropper_state_key:
+            st.session_state.cropper_state_key = cropper_state_key
+            st.session_state.pop("cropper_box", None)
+
+        prev_box = st.session_state.get("cropper_box")
+        default_coords = (
+            (prev_box['left'],
+             prev_box['left'] + prev_box['width'],
+             prev_box['top'],
+             prev_box['top'] + prev_box['height'])
+            if prev_box else None
+        )
+
         box = st_cropper(
             rotated_display,
-            realtime_update=False,
+            realtime_update=True,
             should_resize_image=False,
             aspect_ratio=aspect_map[ratio_choice],
             box_color="#FF0000",
             return_type='box',
+            default_coords=default_coords,
+            key=f"cropper_{selected_storage_key}_{angle}_{ratio_choice}",
         )
         left = box.get('left', 0)
         top = box.get('top', 0)
         width = box.get('width', rotated_display.width)
         height = box.get('height', rotated_display.height)
+
+        st.session_state.cropper_box = {
+            'left': left, 'top': top, 'width': width, 'height': height
+        }
 
         # Scale box back to full-resolution coordinates
         if display_scale < 1.0:
