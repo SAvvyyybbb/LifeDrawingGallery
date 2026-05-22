@@ -95,6 +95,33 @@ def unbatch(batch_id):
     st.success("Batch unbatched! Images are now back in the unbatched pool.")
     st.rerun()
 
+def bulk_unbatch_pending(batch_ids):
+    # Only touches images.batch_id / is_stitched and the batches row. images.hash,
+    # raw_image_data, processed_image_data, and Supabase storage are untouched, so
+    # Discord slash command joins (raw_image_data.hash = images.hash) stay intact.
+    # Filters to pending/complete in SQL so a stale UI cannot unbatch stitched work.
+    if not batch_ids:
+        return 0, 0
+    cursor.execute(
+        "SELECT id FROM batches WHERE id = ANY(%s) AND status IN ('pending', 'complete')",
+        (list(batch_ids),)
+    )
+    safe_ids = [r['id'] for r in cursor.fetchall()]
+    if not safe_ids:
+        return 0, 0
+    cursor.execute(
+        "SELECT COUNT(*) AS c FROM images WHERE batch_id = ANY(%s)",
+        (safe_ids,)
+    )
+    image_count = cursor.fetchone()['c']
+    cursor.execute(
+        "UPDATE images SET batch_id = NULL, is_stitched = -1 WHERE batch_id = ANY(%s)",
+        (safe_ids,)
+    )
+    cursor.execute("DELETE FROM batches WHERE id = ANY(%s)", (safe_ids,))
+    conn.commit()
+    return len(safe_ids), image_count
+
 def save_order(img_updates):
     for img_id, new_order in img_updates:
         cursor.execute("UPDATE images SET manual_order = %s WHERE id = %s", (new_order, img_id))
@@ -185,114 +212,171 @@ with tab1:
     if not pending_stitch:
         st.success("No batches pending stitching!")
     else:
-        # Multi-select for unbatching
         st.write(f"Found {len(pending_stitch)} batches ready to be stitched.")
-        
-        selected_unbatch = st.multiselect("Select batches to unbatch in bulk:", 
-                                         options=[b['id'] for b in pending_stitch],
-                                         format_func=lambda x: next(b['batch_name'] for b in pending_stitch if b['id'] == x))
-        
-        if selected_unbatch:
-            if st.button(f"Unbatch {len(selected_unbatch)} Selected", type="secondary"):
-                for bid in selected_unbatch:
-                    cursor.execute("UPDATE images SET batch_id = NULL, is_stitched = -1 WHERE batch_id = %s", (bid,))
-                    cursor.execute("DELETE FROM batches WHERE id = %s", (bid,))
-                conn.commit()
-                st.success("Selected batches unbatched!")
+
+        # ===== Bulk Unbatch =====
+        st.subheader("📦 Bulk Unbatch")
+        st.caption(
+            "Tick the checkbox next to any batch below, then click Unbatch Selected. "
+            "Images return to the Batch Manager pool ready to be re-grouped. "
+            "Raw images, cleaned images, and hashes (used by Discord slash commands) "
+            "are preserved — only the batch grouping is removed."
+        )
+
+        # Pre-compute image counts (one query) for the confirmation message
+        cursor.execute(
+            "SELECT batch_id, COUNT(*) AS c FROM images WHERE batch_id = ANY(%s) GROUP BY batch_id",
+            ([b['id'] for b in pending_stitch],)
+        )
+        batch_image_counts = {r['batch_id']: r['c'] for r in cursor.fetchall()}
+
+        selected_ids = [b['id'] for b in pending_stitch
+                        if st.session_state.get(f"bulk_chk_{b['id']}", False)]
+        total_imgs_selected = sum(batch_image_counts.get(bid, 0) for bid in selected_ids)
+
+        c_all, c_clr, c_act = st.columns([1, 1, 3])
+        with c_all:
+            if st.button("Select All", key="bulk_select_all", width='stretch'):
+                for b in pending_stitch:
+                    st.session_state[f"bulk_chk_{b['id']}"] = True
                 st.rerun()
+        with c_clr:
+            if st.button("Clear", key="bulk_clear", width='stretch'):
+                for b in pending_stitch:
+                    st.session_state[f"bulk_chk_{b['id']}"] = False
+                st.session_state.bulk_confirming = False
+                st.rerun()
+        with c_act:
+            if not st.session_state.get("bulk_confirming", False):
+                if st.button(
+                    f"🗑️ Unbatch Selected ({len(selected_ids)})",
+                    key="bulk_unbatch_btn",
+                    type="primary",
+                    width='stretch',
+                    disabled=not selected_ids,
+                ):
+                    st.session_state.bulk_confirming = True
+                    st.rerun()
+            else:
+                st.warning(
+                    f"Confirm: unbatch **{len(selected_ids)}** batches and "
+                    f"return **{total_imgs_selected}** images to the pool?"
+                )
+                cc1, cc2 = st.columns(2)
+                if cc1.button("Yes, Unbatch", key="bulk_confirm_yes", type="primary", width='stretch'):
+                    n_batches, n_imgs = bulk_unbatch_pending(selected_ids)
+                    for b in pending_stitch:
+                        st.session_state[f"bulk_chk_{b['id']}"] = False
+                    st.session_state.bulk_confirming = False
+                    st.success(f"Unbatched {n_batches} batches. {n_imgs} images returned to the pool.")
+                    st.rerun()
+                if cc2.button("Cancel", key="bulk_confirm_no", width='stretch'):
+                    st.session_state.bulk_confirming = False
+                    st.rerun()
+
+        st.divider()
 
         for batch in pending_stitch:
             cursor.execute("SELECT * FROM images WHERE batch_id=%s ORDER BY manual_order", (batch['id'],))
             batch_images = cursor.fetchall()
-            
+
             # Skip orphaned/empty batches
             if not batch_images:
                 continue
 
-            with st.expander(f"Stitch: {batch['batch_name']}", expanded=False):
-                # 1. Image Ordering & Audit
-                st.write("### 1. Arrange & Audit")
+            col_chk, col_exp = st.columns([1, 30])
+            with col_chk:
+                st.checkbox(
+                    "Mark for bulk unbatch",
+                    key=f"bulk_chk_{batch['id']}",
+                    label_visibility="collapsed",
+                    help="Mark for bulk unbatch",
+                )
+            with col_exp:
+                with st.expander(f"Stitch: {batch['batch_name']} ({len(batch_images)} images)", expanded=False):
+                    # 1. Image Ordering & Audit
+                    st.write("### 1. Arrange & Audit")
 
-                # Batch veto lookup — one query for all images in this batch
-                img_hashes = [r['hash'] for r in batch_images if r['hash']]
-                if img_hashes:
-                    cursor.execute("SELECT hash, veto FROM raw_image_data WHERE hash = ANY(%s)", (img_hashes,))
-                    veto_map = {r['hash']: r['veto'] for r in cursor.fetchall()}
-                else:
-                    veto_map = {}
+                    # Batch veto lookup — one query for all images in this batch
+                    img_hashes = [r['hash'] for r in batch_images if r['hash']]
+                    if img_hashes:
+                        cursor.execute("SELECT hash, veto FROM raw_image_data WHERE hash = ANY(%s)", (img_hashes,))
+                        veto_map = {r['hash']: r['veto'] for r in cursor.fetchall()}
+                    else:
+                        veto_map = {}
 
-                img_updates = []
-                cols_edit = st.columns(4)
-                for j, img_row in enumerate(batch_images):
-                    with cols_edit[j % 4]:
-                        thumb = get_cleaned_thumbnail(img_row['file_path'], img_row['aspect_category'], size=(80, 80))
-                        if thumb:
-                            st.image(thumb, width=80)
+                    img_updates = []
+                    cols_edit = st.columns(4)
+                    for j, img_row in enumerate(batch_images):
+                        with cols_edit[j % 4]:
+                            thumb = get_cleaned_thumbnail(img_row['file_path'], img_row['aspect_category'], size=(80, 80))
+                            if thumb:
+                                st.image(thumb, width=80)
 
-                        if veto_map.get(img_row['hash']) == 1:
-                            st.error("🚨 VETOED")
+                            if veto_map.get(img_row['hash']) == 1:
+                                st.error("🚨 VETOED")
 
-                        new_order = st.number_input("Order", value=int(img_row['manual_order'] or 0), key=f"ord_{img_row['id']}", min_value=0)
-                        img_updates.append((img_row['id'], new_order))
+                            new_order = st.number_input("Order", value=int(img_row['manual_order'] or 0), key=f"ord_{img_row['id']}", min_value=0)
+                            img_updates.append((img_row['id'], new_order))
 
-                if st.button("Update Order", key=f"upd_{batch['id']}"):
-                    save_order(img_updates)
+                    if st.button("Update Order", key=f"upd_{batch['id']}"):
+                        save_order(img_updates)
 
-                st.divider()
+                    st.divider()
 
-                # 2. Grid Preview
-                st.write("### 2. Grid Preview")
-                col_prev, col_actions = st.columns([2, 1])
+                    # 2. Grid Preview
+                    st.write("### 2. Grid Preview")
+                    col_prev, col_actions = st.columns([2, 1])
 
-                with col_prev:
-                    grid_preview = render_uv(batch_images, scale=0.4)
-                    st.image(grid_preview, caption="Final Stitch Arrangement Preview", width="stretch")
+                    with col_prev:
+                        grid_preview = render_uv(batch_images, scale=0.4)
+                        st.image(grid_preview, caption="Final Stitch Arrangement Preview", width="stretch")
 
-                with col_actions:
-                    st.write("### 3. Commit")
+                    with col_actions:
+                        st.write("### 3. Commit")
 
-                    expected = batch['expected_count'] or 0
-                    current_count = len(batch_images)
-                    is_incomplete = current_count < expected
+                        expected = batch['expected_count'] or 0
+                        current_count = len(batch_images)
+                        is_incomplete = current_count < expected
 
-                    if is_incomplete:
-                        st.error(f"❌ **Batch Incomplete:** {current_count}/{expected} images. Please add more images to this batch in the Batch Manager before stitching.")
-                        st.info("💡 **Tip:** You can use the 'Unbatch' button below to return these images to the pool and regroup them.")
+                        if is_incomplete:
+                            st.error(f"❌ **Batch Incomplete:** {current_count}/{expected} images. Please add more images to this batch in the Batch Manager before stitching.")
+                            st.info("💡 **Tip:** You can use the 'Unbatch' button below to return these images to the pool and regroup them.")
 
-                    target_name = st.selectbox("Assign Master List Name", options=["None"] + MASTER_NAMES, key=f"name_{batch['id']}", disabled=is_incomplete)
+                        target_name = st.selectbox("Assign Master List Name", options=["None"] + MASTER_NAMES, key=f"name_{batch['id']}", disabled=is_incomplete)
 
-                    is_disabled = is_incomplete or (target_name == "None")
+                        is_disabled = is_incomplete or (target_name == "None")
 
-                    if st.button("Stitch & Upload", key=f"btn_{batch['id']}", type="primary", disabled=is_disabled):
-                        if target_name == "None":
-                            st.error("Please assign a name from the Master List first.")
-                        else:
-                            with st.spinner(f"Stitching {batch['batch_name']} as {target_name}..."):
-                                canvas = render_uv(batch_images, verbose=True)
+                        if st.button("Stitch & Upload", key=f"btn_{batch['id']}", type="primary", disabled=is_disabled):
+                            if target_name == "None":
+                                st.error("Please assign a name from the Master List first.")
+                            else:
+                                with st.spinner(f"Stitching {batch['batch_name']} as {target_name}..."):
+                                    canvas = render_uv(batch_images, verbose=True)
 
-                                uv_name = f"{target_name}.png"
-                                temp_path = Path(uv_name)
-                                canvas.save(temp_path)
+                                    uv_name = f"{target_name}.png"
+                                    temp_path = Path(uv_name)
+                                    canvas.save(temp_path)
 
-                                uv_hash = hashlib.sha256(temp_path.read_bytes()).hexdigest()
-                                uv_phash = str(imagehash.phash(canvas))
-                                storage_key = config.upload_to_supabase(temp_path, "uv_maps")
-                                temp_path.unlink(missing_ok=True)
+                                    uv_hash = hashlib.sha256(temp_path.read_bytes()).hexdigest()
+                                    uv_phash = str(imagehash.phash(canvas))
+                                    storage_key = config.upload_to_supabase(temp_path, "uv_maps")
+                                    temp_path.unlink(missing_ok=True)
 
-                                if storage_key:
-                                    cursor.execute("UPDATE batches SET status='stitched', batch_name=%s WHERE id=%s", (target_name, batch['id']))
-                                    cursor.execute(
-                                        "INSERT INTO stitched_phashes (phash, hash, file_path, batch_id, stitched_date) VALUES (%s,%s,%s,%s,%s)",
-                                        (uv_phash, uv_hash, storage_key, batch['id'], datetime.now(timezone.utc).date())
-                                    )
-                                    conn.commit()
-                                    st.success(f"Stitched and uploaded as `{uv_name}` → storage key: `{storage_key}`")
-                                    st.rerun()
-                                else:
-                                    st.error(f"Supabase upload failed for `{uv_name}`. Check bucket permissions and storage quota.")
+                                    if storage_key:
+                                        cursor.execute("UPDATE batches SET status='stitched', batch_name=%s WHERE id=%s", (target_name, batch['id']))
+                                        cursor.execute(
+                                            "INSERT INTO stitched_phashes (phash, hash, file_path, batch_id, stitched_date) VALUES (%s,%s,%s,%s,%s)",
+                                            (uv_phash, uv_hash, storage_key, batch['id'], datetime.now(timezone.utc).date())
+                                        )
+                                        conn.commit()
+                                        st.success(f"Stitched and uploaded as `{uv_name}` → storage key: `{storage_key}`")
+                                        st.rerun()
+                                    else:
+                                        st.error(f"Supabase upload failed for `{uv_name}`. Check bucket permissions and storage quota.")
 
-                    if st.button("Unbatch", key=f"unbatch_{batch['id']}", help="Delete this batch and return images to the pool"):
-                        unbatch(batch['id'])
+                        if st.button("Unbatch", key=f"unbatch_{batch['id']}", help="Delete this batch and return images to the pool"):
+                            unbatch(batch['id'])
 
 with tab2:
     pending_val = [b for b in batches if b['status'] == 'stitched']
