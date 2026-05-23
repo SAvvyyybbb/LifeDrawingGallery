@@ -381,9 +381,13 @@ if "batch_proposals" in st.session_state:
                             st.session_state.batch_proposals.pop(i)
                             st.rerun()
 
-                    inner_cols = st.columns(2)
+                    # Match the actual stitched layout: cols = canvas_width // tile_width.
+                    # Square 512px tile → 4 cols, Landscape/Extra Wide → 2 cols,
+                    # Portrait/Extra Tall 512px tile → 4 cols.
+                    inner_col_count = max(1, 2048 // batch['img_w'])
+                    inner_cols = st.columns(inner_col_count)
                     for j, img in enumerate(batch['images']):
-                        with inner_cols[j % 2]:
+                        with inner_cols[j % inner_col_count]:
                             # DUPLICATE CHECK
                             is_dupe = img['phash'] in existing_phashes or proposal_phashes[img['phash']] > 1
                             is_veto = img.get('veto') == 1
