@@ -228,23 +228,25 @@ else:
         #      before the box coords reach Python; otherwise saves crop at the
         #      library's default 20%-80% rect.
         #   2. On every rerun, a JS useEffect re-applies the rect_* args back onto
-        #      the box, snapping it to whatever default_coords resolves to. We feed
-        #      the user's last box back in so the visible box and Python's coords
-        #      stay locked together. Keyed on (image, angle, aspect) so the box
-        #      resets when any of those change.
-        cropper_state_key = (selected_storage_key, angle, ratio_choice)
-        if st.session_state.get("cropper_state_key") != cropper_state_key:
-            st.session_state.cropper_state_key = cropper_state_key
-            st.session_state.pop("cropper_box", None)
-
-        prev_box = st.session_state.get("cropper_box")
-        default_coords = (
-            (prev_box['left'],
-             prev_box['left'] + prev_box['width'],
-             prev_box['top'],
-             prev_box['top'] + prev_box['height'])
-            if prev_box else None
-        )
+        #      the box, snapping it to whatever default_coords resolves to. To stop
+        #      the snap-back we must feed the user's CURRENT box (the one they just
+        #      dropped) back in as default_coords. The cropper stores its component
+        #      value in st.session_state under its widget key, so reading it BEFORE
+        #      the st_cropper call gives us the latest drop position — no one-frame
+        #      lag, no jump. Key includes (image, angle, aspect) so the box resets
+        #      when any of those change.
+        cropper_key = f"cropper_{selected_storage_key}_{angle}_{ratio_choice}"
+        prev_value = st.session_state.get(cropper_key)
+        if isinstance(prev_value, dict) and 'coords' in prev_value:
+            c = prev_value['coords']
+            default_coords = (
+                c['left'],
+                c['left'] + c['width'],
+                c['top'],
+                c['top'] + c['height'],
+            )
+        else:
+            default_coords = None
 
         box = st_cropper(
             rotated_display,
@@ -254,16 +256,12 @@ else:
             box_color="#FF0000",
             return_type='box',
             default_coords=default_coords,
-            key=f"cropper_{selected_storage_key}_{angle}_{ratio_choice}",
+            key=cropper_key,
         )
         left = box.get('left', 0)
         top = box.get('top', 0)
         width = box.get('width', rotated_display.width)
         height = box.get('height', rotated_display.height)
-
-        st.session_state.cropper_box = {
-            'left': left, 'top': top, 'width': width, 'height': height
-        }
 
         # Scale box back to full-resolution coordinates
         if display_scale < 1.0:
