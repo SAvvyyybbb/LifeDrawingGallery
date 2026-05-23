@@ -331,82 +331,88 @@ if "batch_proposals" in st.session_state:
             ph = img['phash']
             proposal_phashes[ph] = proposal_phashes.get(ph, 0) + 1
 
-    for i, batch in enumerate(st.session_state.batch_proposals):
-        if 'selected' not in batch:
-            batch['selected'] = True
+    BATCHES_PER_ROW = 3
+    for row_start in range(0, len(st.session_state.batch_proposals), BATCHES_PER_ROW):
+        row_cols = st.columns(BATCHES_PER_ROW)
+        for col_idx in range(BATCHES_PER_ROW):
+            i = row_start + col_idx
+            if i >= len(st.session_state.batch_proposals):
+                break
+            batch = st.session_state.batch_proposals[i]
+            if 'selected' not in batch:
+                batch['selected'] = True
 
-        count = len(batch['images'])
-        expected = batch['expected_count']
+            count = len(batch['images'])
+            expected = batch['expected_count']
 
-        # Check for any alerts in this batch
-        has_duplicate = any((img['phash'] in existing_phashes or proposal_phashes[img['phash']] > 1) for img in batch['images'])
-        has_veto = any(img.get('veto') == 1 for img in batch['images'])
+            # Check for any alerts in this batch
+            has_duplicate = any((img['phash'] in existing_phashes or proposal_phashes[img['phash']] > 1) for img in batch['images'])
+            has_veto = any(img.get('veto') == 1 for img in batch['images'])
 
-        alert_icon = "🚨" if (has_duplicate or has_veto) else ("✅" if count == expected else "⚠️")
+            alert_icon = "🚨" if (has_duplicate or has_veto) else ("✅" if count == expected else "⚠️")
 
-        # Determine expanded state based on global toggle or default alert status
-        default_expanded = (alert_icon != "✅")
-        actual_expanded = default_expanded
-        if st.session_state.all_batches_expanded is True:
-            actual_expanded = True
-        elif st.session_state.all_batches_expanded is False:
-            actual_expanded = False
+            # Determine expanded state based on global toggle or default alert status
+            default_expanded = (alert_icon != "✅")
+            actual_expanded = default_expanded
+            if st.session_state.all_batches_expanded is True:
+                actual_expanded = True
+            elif st.session_state.all_batches_expanded is False:
+                actual_expanded = False
 
-        col_sel, col_trash, col_exp = st.columns([1, 1, 19])
-        with col_sel:
-            # We use a distinct key to avoid ID collisions, and update the dict on change.
-            batch['selected'] = st.checkbox("Save", value=batch['selected'], key=f"sel_{i}_{batch['name']}")
-        with col_trash:
-            if st.button("🗑️", key=f"trash_{i}_{batch['name']}", help="Discard this proposal — images return to the Image Editor for re-triage (re-run Stage 1 after editing to re-enter the batching pool)"):
-                discard_proposal_images(batch['images'])
-                st.session_state.batch_proposals.pop(i)
-                st.rerun()
-
-        with col_exp:
-            with st.expander(f"{alert_icon} Batch: {batch['name']} ({count}/{expected} images)", expanded=actual_expanded):
-                if has_duplicate: st.error("🚩 **Duplicate Alert:** One or more images in this batch appear to be already in the database or duplicated in this proposal.")
-                if has_veto: st.warning("🚫 **Veto Alert:** This batch contains an image that has been VETOED (marked as non-art).")
-                
-                st.write(f"**Aspect:** {batch['aspect']} | **Channel:** {batch['channel']} | **Layout:** {batch['img_w']}x{batch['img_h']}")
-                
-                if not batch['images']:
-                    st.info("This batch is empty.")
-                    if st.button(f"🗑️ Delete Empty Batch {i}", key=f"del_batch_{i}"):
+            with row_cols[col_idx]:
+                col_sel, col_trash = st.columns([4, 1])
+                with col_sel:
+                    batch['selected'] = st.checkbox("Save", value=batch['selected'], key=f"sel_{i}_{batch['name']}")
+                with col_trash:
+                    if st.button("🗑️", key=f"trash_{i}_{batch['name']}", help="Discard this proposal — images return to the Image Editor for re-triage (re-run Stage 1 after editing to re-enter the batching pool)"):
+                        discard_proposal_images(batch['images'])
                         st.session_state.batch_proposals.pop(i)
                         st.rerun()
-                
-                cols = st.columns(4)
-                for j, img in enumerate(batch['images']):
-                    with cols[j % 4]:
-                        # DUPLICATE CHECK
-                        is_dupe = img['phash'] in existing_phashes or proposal_phashes[img['phash']] > 1
-                        is_veto = img.get('veto') == 1
-                        
-                        image_url = f"{config.SUPABASE_URL}/storage/v1/object/public/cleaned_images/{img['storage_key_processed']}"
-                        st.image(image_url, width="stretch")
-                        
-                        if is_dupe: st.error("🚩 DUPLICATE")
-                        if is_veto: st.warning("🚫 VETOED")
-                        
-                        # Link to Editor
-                        if st.button("Edit ✂️", key=f"edit_btn_{i}_{j}"):
-                            st.session_state.target_edit_hash = img['original_hash']
-                            st.switch_page("pages/0_Image_Editor.py")
 
-                        target_batch = st.selectbox(f"Move to:", batch_names, index=i, key=f"move_sel_{i}_{j}", label_visibility="collapsed")
-                        col_btn1, col_btn2 = st.columns(2)
-                        if col_btn1.button("Move", key=f"move_btn_{i}_{j}"):
-                            if target_batch != batch['name']:
-                                target_idx = batch_names.index(target_batch)
-                                moved_img = st.session_state.batch_proposals[i]['images'].pop(j)
-                                st.session_state.batch_proposals[target_idx]['images'].append(moved_img)
-                                st.rerun()
-                        if col_btn2.button("Remove", key=f"rem_btn_{i}_{j}"):
-                            st.session_state.batch_proposals[i]['images'].pop(j)
+                with st.expander(f"{alert_icon} {batch['name']} ({count}/{expected})", expanded=actual_expanded):
+                    if has_duplicate: st.error("🚩 **Duplicate Alert:** One or more images in this batch appear to be already in the database or duplicated in this proposal.")
+                    if has_veto: st.warning("🚫 **Veto Alert:** This batch contains an image that has been VETOED (marked as non-art).")
+
+                    st.caption(f"{batch['aspect']} · {batch['channel']} · {batch['img_w']}×{batch['img_h']}")
+
+                    if not batch['images']:
+                        st.info("This batch is empty.")
+                        if st.button(f"🗑️ Delete Empty Batch {i}", key=f"del_batch_{i}"):
+                            st.session_state.batch_proposals.pop(i)
                             st.rerun()
-                        
-                        color_hex = '#%02x%02x%02x' % (int(img['avg_r']), int(img['avg_g']), int(img['avg_b']))
-                        st.markdown(f"<div style='height: 5px; width: 100%; background-color: {color_hex};'></div>", unsafe_allow_html=True)
+
+                    inner_cols = st.columns(2)
+                    for j, img in enumerate(batch['images']):
+                        with inner_cols[j % 2]:
+                            # DUPLICATE CHECK
+                            is_dupe = img['phash'] in existing_phashes or proposal_phashes[img['phash']] > 1
+                            is_veto = img.get('veto') == 1
+
+                            image_url = f"{config.SUPABASE_URL}/storage/v1/object/public/cleaned_images/{img['storage_key_processed']}"
+                            st.image(image_url, width="stretch")
+
+                            if is_dupe: st.error("🚩 DUPLICATE")
+                            if is_veto: st.warning("🚫 VETOED")
+
+                            # Link to Editor
+                            if st.button("Edit ✂️", key=f"edit_btn_{i}_{j}", width='stretch'):
+                                st.session_state.target_edit_hash = img['original_hash']
+                                st.switch_page("pages/0_Image_Editor.py")
+
+                            target_batch = st.selectbox(f"Move to:", batch_names, index=i, key=f"move_sel_{i}_{j}", label_visibility="collapsed")
+                            col_btn1, col_btn2 = st.columns(2)
+                            if col_btn1.button("Move", key=f"move_btn_{i}_{j}", width='stretch'):
+                                if target_batch != batch['name']:
+                                    target_idx = batch_names.index(target_batch)
+                                    moved_img = st.session_state.batch_proposals[i]['images'].pop(j)
+                                    st.session_state.batch_proposals[target_idx]['images'].append(moved_img)
+                                    st.rerun()
+                            if col_btn2.button("Remove", key=f"rem_btn_{i}_{j}", width='stretch'):
+                                st.session_state.batch_proposals[i]['images'].pop(j)
+                                st.rerun()
+
+                            color_hex = '#%02x%02x%02x' % (int(img['avg_r']), int(img['avg_g']), int(img['avg_b']))
+                            st.markdown(f"<div style='height: 5px; width: 100%; background-color: {color_hex};'></div>", unsafe_allow_html=True)
 
     if st.button("Save and Commit Batches"):
         with st.spinner("Saving batches to cloud..."):
