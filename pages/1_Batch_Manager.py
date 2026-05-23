@@ -48,6 +48,122 @@ def compute_tile_size(category):
     else:
         return 2048, 2048, 1
 
+def bulk_unbatch_pending(batch_ids):
+    # Only touches images.batch_id / is_stitched and the batches row. images.hash,
+    # raw_image_data, processed_image_data, and Supabase storage are untouched, so
+    # Discord slash command joins (raw_image_data.hash = images.hash) stay intact.
+    # Filters to pending/complete in SQL so a stale UI cannot unbatch stitched work.
+    if not batch_ids:
+        return 0, 0
+    cursor.execute(
+        "SELECT id FROM batches WHERE id = ANY(%s) AND status IN ('pending', 'complete')",
+        (list(batch_ids),)
+    )
+    safe_ids = [r['id'] for r in cursor.fetchall()]
+    if not safe_ids:
+        return 0, 0
+    cursor.execute(
+        "SELECT COUNT(*) AS c FROM images WHERE batch_id = ANY(%s)",
+        (safe_ids,)
+    )
+    image_count = cursor.fetchone()['c']
+    cursor.execute(
+        "UPDATE images SET batch_id = NULL, is_stitched = -1 WHERE batch_id = ANY(%s)",
+        (safe_ids,)
+    )
+    cursor.execute("DELETE FROM batches WHERE id = ANY(%s)", (safe_ids,))
+    conn.commit()
+    return len(safe_ids), image_count
+
+# ---------------- Existing Batches (Bulk Unbatch) ----------------
+cursor.execute("""
+    SELECT b.id, b.batch_name, b.primary_folder, b.secondary_folder, b.expected_count,
+           COUNT(i.id) AS image_count
+    FROM batches b
+    LEFT JOIN images i ON i.batch_id = b.id
+    WHERE b.status IN ('pending', 'complete')
+    GROUP BY b.id
+    ORDER BY b.id DESC
+""")
+existing_batches = cursor.fetchall()
+
+if existing_batches:
+    with st.expander(
+        f"📦 Existing Batches ({len(existing_batches)}) — bulk unbatch",
+        expanded=True,
+    ):
+        st.caption(
+            "Tick any batches and click Unbatch Selected to send their images back to the "
+            "pool below for re-grouping. Raw images, cleaned images, and hashes (used by "
+            "Discord slash commands) are preserved — only the batch grouping is removed."
+        )
+
+        selected_ids = [b['id'] for b in existing_batches
+                        if st.session_state.get(f"bulk_chk_{b['id']}", False)]
+        total_imgs_selected = sum(
+            b['image_count'] for b in existing_batches if b['id'] in selected_ids
+        )
+
+        c_all, c_clr, c_act = st.columns([1, 1, 3])
+        with c_all:
+            if st.button("Select All", key="bulk_select_all", width='stretch'):
+                for b in existing_batches:
+                    st.session_state[f"bulk_chk_{b['id']}"] = True
+                st.rerun()
+        with c_clr:
+            if st.button("Clear", key="bulk_clear", width='stretch'):
+                for b in existing_batches:
+                    st.session_state[f"bulk_chk_{b['id']}"] = False
+                st.session_state.bulk_confirming = False
+                st.rerun()
+        with c_act:
+            if not st.session_state.get("bulk_confirming", False):
+                if st.button(
+                    f"🗑️ Unbatch Selected ({len(selected_ids)})",
+                    key="bulk_unbatch_btn",
+                    type="primary",
+                    width='stretch',
+                    disabled=not selected_ids,
+                ):
+                    st.session_state.bulk_confirming = True
+                    st.rerun()
+            else:
+                st.warning(
+                    f"Confirm: unbatch **{len(selected_ids)}** batches and "
+                    f"return **{total_imgs_selected}** images to the pool?"
+                )
+                cc1, cc2 = st.columns(2)
+                if cc1.button("Yes, Unbatch", key="bulk_confirm_yes", type="primary", width='stretch'):
+                    n_batches, n_imgs = bulk_unbatch_pending(selected_ids)
+                    for b in existing_batches:
+                        st.session_state[f"bulk_chk_{b['id']}"] = False
+                    st.session_state.bulk_confirming = False
+                    st.success(f"Unbatched {n_batches} batches. {n_imgs} images returned to the pool.")
+                    st.rerun()
+                if cc2.button("Cancel", key="bulk_confirm_no", width='stretch'):
+                    st.session_state.bulk_confirming = False
+                    st.rerun()
+
+        st.divider()
+
+        for b in existing_batches:
+            col_chk, col_info = st.columns([1, 30])
+            with col_chk:
+                st.checkbox(
+                    "Mark for bulk unbatch",
+                    key=f"bulk_chk_{b['id']}",
+                    label_visibility="collapsed",
+                    help="Mark for bulk unbatch",
+                )
+            with col_info:
+                expected = b['expected_count'] or 0
+                count = b['image_count']
+                marker = "✅" if (expected and count == expected) else "⚠️"
+                st.write(
+                    f"{marker} **{b['batch_name']}** — {count}/{expected} images "
+                    f"({b['secondary_folder']} · {b['primary_folder']})"
+                )
+
 # ---------------- Data Loading ----------------
 with st.spinner("Loading data..."):
     # 1. Unbatched Images (Includes completely new images and ones that failed stitching)
