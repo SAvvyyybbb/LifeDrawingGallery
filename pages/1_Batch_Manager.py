@@ -217,7 +217,49 @@ with st.spinner("Loading data..."):
     existing_phashes = set(r['perceptual_hash'] for r in cursor.fetchall())
 
 if not unbatched_images:
-    st.info("No new cleaned images found. Please run **Stage 01 (Pre-Processing)** by executing `python3 process_stage1.py` in your terminal first.")
+    # Count raw images waiting for Stage 1 so we can hint at whether the button
+    # will actually do anything before the user clicks.
+    cursor.execute("""
+        SELECT COUNT(*) AS c FROM raw_image_data
+        WHERE processing = 0 AND veto = 0 AND storage_key_raw IS NOT NULL
+    """)
+    pending_raw = cursor.fetchone()['c']
+
+    if pending_raw > 0:
+        st.info(
+            f"No cleaned images in the batching pool yet, but **{pending_raw} raw image(s)** "
+            "are waiting for Stage 1 (Pre-Processing). Click below to run it now."
+        )
+    else:
+        st.success(
+            "No cleaned images in the batching pool and no raw images waiting. "
+            "Scrape some new images from Discord, or check the Image Editor for items "
+            "needing manual crop."
+        )
+
+    if st.button(
+        f"⚙️ Run Stage 1 (Pre-Processing) Now" + (f" ({pending_raw} image(s))" if pending_raw else ""),
+        type="primary",
+        disabled=(pending_raw == 0),
+    ):
+        from process_stage1 import run_processing
+        progress = st.progress(0.0, text="Starting Stage 1…")
+        def _update(done, total, filename):
+            progress.progress(done / total, text=f"Processing {done}/{total}: {filename}")
+        with st.spinner("Running Stage 1 — this may take a while for large queues."):
+            result = run_processing(progress_callback=_update)
+        progress.empty()
+        st.success(
+            f"Stage 1 complete: {result['success']} processed, "
+            f"{result['skipped_duplicates']} duplicates skipped, "
+            f"{len(result['failed'])} failed."
+        )
+        if result['failed']:
+            with st.expander("Show failed images"):
+                for f in result['failed']:
+                    st.write(f"- {f}")
+        st.rerun()
+
     st.stop()
 
 st.write(f"**Found {len(unbatched_images)} images ready for batching.**")

@@ -37,7 +37,14 @@ def already_stitched(cursor, original_hash):
     """, (original_hash,))
     return cursor.fetchone() is not None
 
-def run_processing():
+def run_processing(progress_callback=None):
+    """Run Stage 1 against every raw_image_data row with processing=0.
+
+    progress_callback(current, total, filename) — optional, called after each
+    image so callers (e.g. Streamlit) can render a progress bar.
+
+    Returns a summary dict: {success, skipped_duplicates, failed, total}.
+    """
     conn = config.get_db_connection()
     cursor = conn.cursor()
 
@@ -52,7 +59,7 @@ def run_processing():
     if not db_records:
         print("No images found to process.")
         conn.close()
-        return
+        return {'success': 0, 'skipped_duplicates': 0, 'failed': [], 'total': 0}
 
     print(f"Total images queued: {len(db_records)}")
 
@@ -60,7 +67,7 @@ def run_processing():
     skipped_duplicates = 0
     failed = []
 
-    for row in db_records:
+    for idx, row in enumerate(db_records):
         original_hash = row[0]
         active_hash = row[1] if row[1] else row[0]
         storage_key = row[2]
@@ -181,12 +188,24 @@ def run_processing():
 
         conn.commit()
 
+        if progress_callback:
+            try:
+                progress_callback(idx + 1, len(db_records), filename)
+            except Exception as cb_err:
+                print(f"  (progress callback error: {cb_err})")
+
     print("\nProcessing complete")
     print(f"Processed successfully: {success_count}")
     print(f"Duplicates skipped: {skipped_duplicates}")
     if failed: print(f"Failed images: {failed}")
 
     conn.close()
+    return {
+        'success': success_count,
+        'skipped_duplicates': skipped_duplicates,
+        'failed': failed,
+        'total': len(db_records),
+    }
 
 if __name__ == "__main__":
     run_processing()
