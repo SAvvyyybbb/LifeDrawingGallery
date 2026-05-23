@@ -177,7 +177,10 @@ with st.spinner("Loading data..."):
     unbatched_images = cursor.fetchall()
     
     # 2. Existing Phashes (for duplicate detection)
-    cursor.execute("SELECT perceptual_hash FROM images")
+    # Filter to batch_id IS NOT NULL — unbatched rows (batch_id NULL, often is_stitched=-1)
+    # are the SAME images that appear in unbatched_images, so including them would flag
+    # every previously-unbatched image as a duplicate of itself.
+    cursor.execute("SELECT perceptual_hash FROM images WHERE batch_id IS NOT NULL")
     existing_phashes = set(r['perceptual_hash'] for r in cursor.fetchall())
 
 if not unbatched_images:
@@ -222,21 +225,43 @@ if "batch_proposals" in st.session_state:
     if "all_batches_expanded" not in st.session_state:
         st.session_state.all_batches_expanded = None # None means use default logic
 
-    col_expand_all, col_collapse_all = st.columns(2)
+    col_expand_all, col_collapse_all, col_discard_all = st.columns(3)
 
     with col_expand_all:
-        if st.button("Expand All Batches", key="btn_expand_all_batches"):
+        if st.button("Expand All Batches", key="btn_expand_all_batches", width='stretch'):
             st.session_state.all_batches_expanded = True
             st.rerun()
 
     with col_collapse_all:
-        if st.button("Collapse All Batches", key="btn_collapse_all_batches"):
+        if st.button("Collapse All Batches", key="btn_collapse_all_batches", width='stretch'):
             st.session_state.all_batches_expanded = False
             st.rerun()
 
+    with col_discard_all:
+        if not st.session_state.get("discard_all_confirming", False):
+            if st.button(
+                f"🗑️ Discard All Proposals ({len(st.session_state.batch_proposals)})",
+                key="btn_discard_all",
+                type="secondary",
+                width='stretch',
+                help="Drop every proposal. Images stay in the pool — nothing is saved or deleted from the DB."
+            ):
+                st.session_state.discard_all_confirming = True
+                st.rerun()
+        else:
+            st.warning(f"Discard all {len(st.session_state.batch_proposals)} proposals?")
+            cc1, cc2 = st.columns(2)
+            if cc1.button("Yes", key="discard_all_yes", type="primary", width='stretch'):
+                del st.session_state.batch_proposals
+                st.session_state.discard_all_confirming = False
+                st.rerun()
+            if cc2.button("Cancel", key="discard_all_no", width='stretch'):
+                st.session_state.discard_all_confirming = False
+                st.rerun()
+
     st.subheader("Proposed Batches")
     batch_names = [b['name'] for b in st.session_state.batch_proposals]
-        
+
     # Track phashes in current proposal to find duplicates within the proposal
     proposal_phashes = {}
     for b in st.session_state.batch_proposals:
@@ -250,13 +275,13 @@ if "batch_proposals" in st.session_state:
 
         count = len(batch['images'])
         expected = batch['expected_count']
-        
+
         # Check for any alerts in this batch
         has_duplicate = any((img['phash'] in existing_phashes or proposal_phashes[img['phash']] > 1) for img in batch['images'])
         has_veto = any(img.get('veto') == 1 for img in batch['images'])
-        
+
         alert_icon = "🚨" if (has_duplicate or has_veto) else ("✅" if count == expected else "⚠️")
-        
+
         # Determine expanded state based on global toggle or default alert status
         default_expanded = (alert_icon != "✅")
         actual_expanded = default_expanded
@@ -265,11 +290,15 @@ if "batch_proposals" in st.session_state:
         elif st.session_state.all_batches_expanded is False:
             actual_expanded = False
 
-        col_sel, col_exp = st.columns([1, 20])
+        col_sel, col_trash, col_exp = st.columns([1, 1, 19])
         with col_sel:
             # We use a distinct key to avoid ID collisions, and update the dict on change.
             batch['selected'] = st.checkbox("Save", value=batch['selected'], key=f"sel_{i}_{batch['name']}")
-        
+        with col_trash:
+            if st.button("🗑️", key=f"trash_{i}_{batch['name']}", help="Discard this proposal (images return to the unbatched pool)"):
+                st.session_state.batch_proposals.pop(i)
+                st.rerun()
+
         with col_exp:
             with st.expander(f"{alert_icon} Batch: {batch['name']} ({count}/{expected} images)", expanded=actual_expanded):
                 if has_duplicate: st.error("🚩 **Duplicate Alert:** One or more images in this batch appear to be already in the database or duplicated in this proposal.")
