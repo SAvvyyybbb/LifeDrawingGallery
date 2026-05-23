@@ -75,6 +75,38 @@ def bulk_unbatch_pending(batch_ids):
     conn.commit()
     return len(safe_ids), image_count
 
+def discard_proposal_images(images_list):
+    # Send a list of pool images back to Image Editor triage. For each image:
+    #   1. DELETE any orphan images row (batch_id NULL — leftover from a prior unbatch).
+    #   2. DELETE the processed_image_data row so it drops out of the Batch Manager pool.
+    #   3. Reset raw_image_data.processing=0 so it reappears in the Image Editor.
+    # The cleaned_images Supabase file is left orphaned (cheap; periodic cleanup is fine).
+    # Raw image, modified_hash, and storage_key_raw are preserved, so re-edit + re-Stage 1
+    # produces a fresh processed_image_data row.
+    if not images_list:
+        return 0
+    processed_hashes = [img['hash'] for img in images_list if img.get('hash')]
+    file_paths = [img['storage_key_processed'] for img in images_list if img.get('storage_key_processed')]
+    raw_hashes = [img['original_hash'] for img in images_list if img.get('original_hash')]
+    if not processed_hashes:
+        return 0
+    if file_paths:
+        cursor.execute(
+            "DELETE FROM images WHERE file_path = ANY(%s) AND batch_id IS NULL",
+            (file_paths,)
+        )
+    cursor.execute(
+        "DELETE FROM processed_image_data WHERE hash = ANY(%s)",
+        (processed_hashes,)
+    )
+    if raw_hashes:
+        cursor.execute(
+            "UPDATE raw_image_data SET processing = 0 WHERE hash = ANY(%s)",
+            (raw_hashes,)
+        )
+    conn.commit()
+    return len(processed_hashes)
+
 # ---------------- Existing Batches (Bulk Unbatch) ----------------
 cursor.execute("""
     SELECT b.id, b.batch_name, b.primary_folder, b.secondary_folder, b.expected_count,
@@ -270,16 +302,22 @@ if "batch_proposals" in st.session_state:
                 key="btn_discard_all",
                 type="secondary",
                 width='stretch',
-                help="Drop every proposal. Images stay in the pool — nothing is saved or deleted from the DB."
+                help="Drop every proposal. Images go back to the Image Editor for re-triage (re-run Stage 1 after editing to re-enter the batching pool)."
             ):
                 st.session_state.discard_all_confirming = True
                 st.rerun()
         else:
-            st.warning(f"Discard all {len(st.session_state.batch_proposals)} proposals?")
+            all_images = [img for batch in st.session_state.batch_proposals for img in batch['images']]
+            st.warning(
+                f"Discard all {len(st.session_state.batch_proposals)} proposals "
+                f"and send {len(all_images)} images back to the Image Editor?"
+            )
             cc1, cc2 = st.columns(2)
             if cc1.button("Yes", key="discard_all_yes", type="primary", width='stretch'):
+                n_returned = discard_proposal_images(all_images)
                 del st.session_state.batch_proposals
                 st.session_state.discard_all_confirming = False
+                st.success(f"Discarded {n_returned} images. Open the Image Editor to re-triage, then re-run Stage 1.")
                 st.rerun()
             if cc2.button("Cancel", key="discard_all_no", width='stretch'):
                 st.session_state.discard_all_confirming = False
@@ -321,7 +359,8 @@ if "batch_proposals" in st.session_state:
             # We use a distinct key to avoid ID collisions, and update the dict on change.
             batch['selected'] = st.checkbox("Save", value=batch['selected'], key=f"sel_{i}_{batch['name']}")
         with col_trash:
-            if st.button("🗑️", key=f"trash_{i}_{batch['name']}", help="Discard this proposal (images return to the unbatched pool)"):
+            if st.button("🗑️", key=f"trash_{i}_{batch['name']}", help="Discard this proposal — images return to the Image Editor for re-triage (re-run Stage 1 after editing to re-enter the batching pool)"):
+                discard_proposal_images(batch['images'])
                 st.session_state.batch_proposals.pop(i)
                 st.rerun()
 
