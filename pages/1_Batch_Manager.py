@@ -223,47 +223,43 @@ if not unbatched_images:
 st.write(f"**Found {len(unbatched_images)} images ready for batching.**")
 
 # ---------------- Batching Logic ----------------
-col_grp1, col_grp2 = st.columns(2)
-with col_grp1:
-    do_group = st.button(
-        "Auto-Group into Batches",
-        key="btn_auto_group",
-        width='stretch',
-        help="Group by aspect ratio + Discord channel.",
-    )
-with col_grp2:
-    do_group_by_user = st.button(
-        "Auto-Group by User",
-        key="btn_auto_group_user",
-        width='stretch',
-        help="Group by aspect ratio + Discord channel + submitter, so each user's work stays in its own batches.",
-    )
+# Build user options from the unbatched pool, ordered by submission count.
+user_counts = {}
+for img in unbatched_images:
+    name = img.get('poster_name') or img.get('poster_id') or 'unknown'
+    user_counts[name] = user_counts.get(name, 0) + 1
+sorted_users = sorted(user_counts.items(), key=lambda x: (-x[1], x[0]))
+user_label_map = {f"{name}  ({count})": name for name, count in sorted_users}
 
-if do_group or do_group_by_user:
-    # Hierarchical Grouping: Aspect -> Channel -> (User, optional)
-    group_by_user = do_group_by_user
+selected_user_labels = st.multiselect(
+    "Isolate batches for these users (optional)",
+    options=list(user_label_map.keys()),
+    key="isolate_users",
+    help="Selected users get their own per-user batches (one set of batches per user per aspect/channel). Everyone else falls into default aspect+channel grouping. Leave empty for pure default."
+)
+isolated_users = {user_label_map[lbl] for lbl in selected_user_labels}
+
+if st.button("Auto-Group into Batches", key="btn_auto_group", type="primary", width='stretch'):
+    # Hierarchical Grouping: Aspect -> Channel -> (User only if isolated)
     groups = {}
     for img in unbatched_images:
         aspect = img['category']
         channel = img['discord_channel'] or "Unknown"
-        if group_by_user:
-            poster_id = img.get('poster_id') or 'unknown'
-            poster_name = img.get('poster_name') or poster_id
-        else:
-            poster_id, poster_name = None, None
-        key = (aspect, channel, poster_id, poster_name)
+        poster_name = img.get('poster_name') or img.get('poster_id') or 'unknown'
+        isolated_poster = poster_name if poster_name in isolated_users else None
+        key = (aspect, channel, isolated_poster)
         groups.setdefault(key, []).append(img)
 
     batch_proposals = []
     timestamp = datetime.now().strftime('%m%d_%H%M')
-    for (aspect, channel, _poster_id, poster_name), imgs in groups.items():
+    for (aspect, channel, isolated_poster), imgs in groups.items():
         # ADVANCED SORT: Sort by Color (Hue/Saturation/B&W)
         imgs.sort(key=lambda x: get_color_sort_key(x['avg_r'], x['avg_g'], x['avg_b']))
 
         tile_w, tile_h, capacity = compute_tile_size(aspect)
         for i in range(0, len(imgs), capacity):
             batch_imgs = imgs[i:i+capacity]
-            user_part = f"_{poster_name.replace(' ', '_')}" if poster_name else ""
+            user_part = f"_{isolated_poster.replace(' ', '_')}" if isolated_poster else ""
             batch_proposals.append({
                 "name": f"{aspect}_{channel}{user_part}_{timestamp}_{len(batch_proposals)+1}",
                 "aspect": aspect,
@@ -274,8 +270,10 @@ if do_group or do_group_by_user:
                 "images": batch_imgs
             })
     st.session_state.batch_proposals = batch_proposals
-    mode_label = "by user" if group_by_user else "by channel"
-    st.success(f"Proposed {len(batch_proposals)} batches ({mode_label}).")
+    if isolated_users:
+        st.success(f"Proposed {len(batch_proposals)} batches with {len(isolated_users)} user(s) isolated.")
+    else:
+        st.success(f"Proposed {len(batch_proposals)} batches.")
 
 # ---------------- Display Proposals ----------------
 if "batch_proposals" in st.session_state:
