@@ -223,41 +223,37 @@ else:
 
         rotated_display = display_img.rotate(angle, expand=True)
 
-        # streamlit_cropper has two traps:
-        #   1. realtime_update=False requires the user to DOUBLE-CLICK the canvas
-        #      before the box coords reach Python; otherwise saves crop at the
-        #      library's default 20%-80% rect.
-        #   2. On every rerun, a JS useEffect re-applies the rect_* args back onto
-        #      the box, snapping it to whatever default_coords resolves to. To stop
-        #      the snap-back we must feed the user's CURRENT box (the one they just
-        #      dropped) back in as default_coords. The cropper stores its component
-        #      value in st.session_state under its widget key, so reading it BEFORE
-        #      the st_cropper call gives us the latest drop position — no one-frame
-        #      lag, no jump. Key includes (image, angle, aspect) so the box resets
-        #      when any of those change.
+        # Wrap the cropper + save buttons in a form. Inside a form, widget
+        # interactions (including custom-component setComponentValue) do NOT
+        # trigger script reruns — the box stays exactly where the user drops
+        # it, no useEffect snap-back, no aspect/resize jumpiness. The form
+        # commits all widget values atomically when the user clicks a
+        # form_submit_button (Save / Save & Load Next).
+        #
+        # Angle slider + aspect-ratio selectbox stay OUTSIDE the form so they
+        # give live preview. Veto stays outside the form too — it doesn't
+        # depend on the cropper's box value.
         cropper_key = f"cropper_{selected_storage_key}_{angle}_{ratio_choice}"
-        prev_value = st.session_state.get(cropper_key)
-        if isinstance(prev_value, dict) and 'coords' in prev_value:
-            c = prev_value['coords']
-            default_coords = (
-                c['left'],
-                c['left'] + c['width'],
-                c['top'],
-                c['top'] + c['height'],
+        with st.form("crop_form", clear_on_submit=False):
+            box = st_cropper(
+                rotated_display,
+                realtime_update=True,
+                should_resize_image=False,
+                aspect_ratio=aspect_map[ratio_choice],
+                box_color="#FF0000",
+                return_type='box',
+                key=cropper_key,
             )
-        else:
-            default_coords = None
+            f_col1, f_col2 = st.columns(2)
+            save_clicked = f_col1.form_submit_button(
+                "💾 Save Current Image", type="primary", width='stretch',
+                help="Save the cropped and rotated version, and stay on this image."
+            )
+            save_next_clicked = f_col2.form_submit_button(
+                "⏩ Save & Load Next", type="primary", width='stretch',
+                help="Save changes and automatically jump to the next image in the queue."
+            )
 
-        box = st_cropper(
-            rotated_display,
-            realtime_update=True,
-            should_resize_image=False,
-            aspect_ratio=aspect_map[ratio_choice],
-            box_color="#FF0000",
-            return_type='box',
-            default_coords=default_coords,
-            key=cropper_key,
-        )
         left = box.get('left', 0)
         top = box.get('top', 0)
         width = box.get('width', rotated_display.width)
@@ -273,40 +269,40 @@ else:
         rotated_full = image.rotate(angle, expand=True)
         cropped_img = rotated_full.crop((left, top, left + width, top + height))
 
+        def do_save():
+            temp_path = IMAGE_DIR / "temp_crop.jpg"
+            save_img = cropped_img.convert('RGB') if cropped_img.mode == 'RGBA' else cropped_img
+            save_img.save(temp_path, format="JPEG")
+            new_hash = sha256_file(temp_path)
+            final_path = IMAGE_DIR / f"{new_hash}.jpg"
+            temp_path.rename(final_path)
+            new_key = config.upload_to_supabase(final_path, "raw_images")
+            if new_key:
+                update_modified_hash_by_hash(original_hash, new_hash, new_key)
+                return True
+            return False
+
+        if save_clicked:
+            if do_save():
+                st.success("Saved!")
+                st.rerun()
+
+        if save_next_clicked:
+            if do_save():
+                if st.session_state.selected_idx < len(db_images) - 1:
+                    st.session_state.selected_idx += 1
+                else:
+                    st.session_state.editor_mode = "grid"
+                st.rerun()
+
         with col_ctrl:
-            def do_save():
-                temp_path = IMAGE_DIR / "temp_crop.jpg"
-                save_img = cropped_img.convert('RGB') if cropped_img.mode == 'RGBA' else cropped_img
-                save_img.save(temp_path, format="JPEG")
-                new_hash = sha256_file(temp_path)
-                final_path = IMAGE_DIR / f"{new_hash}.jpg"
-                temp_path.rename(final_path)
-                new_key = config.upload_to_supabase(final_path, "raw_images")
-                if new_key:
-                    update_modified_hash_by_hash(original_hash, new_hash, new_key)
-                    return True
-                return False
-
-            # Save Actions
             st.write("### 💾 Actions")
-            if st.button("💾 Save Current Image", type="primary", width='stretch', help="Save the cropped and rotated version, and stay on this image."):
-                if do_save():
-                    st.success("Saved!")
-                    st.rerun()
-
-            if st.button("⏩ Save & Load Next", type="primary", width='stretch', help="Save changes and automatically jump to the next image in the queue."):
-                if do_save():
-                    if st.session_state.selected_idx < len(db_images)-1:
-                        st.session_state.selected_idx += 1
-                    else:
-                        st.session_state.editor_mode = "grid"
-                    st.rerun()
-
+            st.caption("Adjust the crop above, then click **Save** to commit.")
             if st.button("🚫 Veto (Not Art)", type="secondary", width='stretch', help="Mark this image as invalid/not art so it won't be processed."):
                 cursor.execute("UPDATE raw_image_data SET veto = 1 WHERE hash = %s", (original_hash,))
                 conn.commit()
                 st.success("Vetoed.")
-                if st.session_state.selected_idx < len(db_images)-1:
+                if st.session_state.selected_idx < len(db_images) - 1:
                     st.session_state.selected_idx += 1
                 else:
                     st.session_state.editor_mode = "grid"
