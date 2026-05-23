@@ -214,6 +214,18 @@ class GalleryBot(commands.Bot):
         await self.tree.sync()
         print(f"[Bot] Tree synced.")
 
+    async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        print(f"[SlashError] /{interaction.command.name if interaction.command else '?'}: {error}")
+        traceback.print_exc()
+        msg = f"Something went wrong: {error}"
+        try:
+            if interaction.response.is_done():
+                await interaction.followup.send(msg, ephemeral=True)
+            else:
+                await interaction.response.send_message(msg, ephemeral=True)
+        except Exception:
+            pass
+
 bot = GalleryBot()
 
 # ---------------- Interaction Components ----------------
@@ -382,7 +394,7 @@ async def my_showcase(interaction: discord.Interaction):
 
 @bot.tree.command(name="gallery_stats", description="View overall statistics of the Life Drawing Gallery pipeline.")
 async def gallery_stats(interaction: discord.Interaction):
-    await interaction.response.defer(ephemeral=False)
+    await interaction.response.defer(ephemeral=True)
     raw_stats, batch_stats = await asyncio.to_thread(_db_fetch_gallery_stats)
     pending_triage = sum(r['count'] for r in raw_stats if r['processing'] == 0 and r['veto'] == 0)
     total_vetoed = sum(r['count'] for r in raw_stats if r['veto'] == 1)
@@ -397,26 +409,31 @@ async def gallery_stats(interaction: discord.Interaction):
     embed.add_field(name="📦 2. Batch Manager", value=f"• Active Batches: **{pending_batching}**", inline=False)
     embed.add_field(name="🧵 3. Stitching & Validation", value=f"• Pending Validation: **{pending_validation}** batches\n• Ready for Deploy: **{pending_deployment}** batches", inline=False)
     embed.add_field(name="🌟 4. Live Gallery", value=f"• Currently Live UVs: **{live_uvs}**\n• Archived/Legacy UVs: **{archived_uvs}**", inline=False)
-    
-    await interaction.followup.send(embed=embed)
+
+    await interaction.followup.send(embed=embed, ephemeral=True)
 
 @bot.tree.command(name="my_stats", description="View your personal contribution statistics to the Gallery.")
 async def my_stats(interaction: discord.Interaction):
-    await interaction.response.defer(ephemeral=False)
-    raw_stats, batch_stats = await asyncio.to_thread(_db_fetch_user_stats, str(interaction.user.id))
+    await interaction.response.defer(ephemeral=True)
+    try:
+        raw_stats, batch_stats = await asyncio.to_thread(_db_fetch_user_stats, str(interaction.user.id))
 
-    total_submitted = sum(r['count'] for r in raw_stats)
-    total_vetoed = sum(r['count'] for r in raw_stats if r['veto'] == 1)
-    live_count = sum(r['count'] for r in batch_stats if r['status'] == 'deployed')
-    archived_count = sum(r['count'] for r in batch_stats if r['status'] == 'archived')
+        total_submitted = sum(r['count'] for r in raw_stats)
+        total_vetoed = sum(r['count'] for r in raw_stats if r['veto'] == 1)
+        live_count = sum(r['count'] for r in batch_stats if r['status'] == 'deployed')
+        archived_count = sum(r['count'] for r in batch_stats if r['status'] == 'archived')
 
-    embed = discord.Embed(title=f"📈 {interaction.user.display_name}'s Stats", color=discord.Color.green())
-    embed.add_field(name="Total Submissions", value=f"**{total_submitted}** images", inline=True)
-    embed.add_field(name="Vetoed", value=f"**{total_vetoed}** images", inline=True)
-    embed.add_field(name="Currently Live", value=f"**{live_count}** artworks", inline=True)
-    embed.add_field(name="Archived/Past", value=f"**{archived_count}** artworks", inline=True)
+        embed = discord.Embed(title=f"📈 {interaction.user.display_name}'s Stats", color=discord.Color.green())
+        embed.add_field(name="Total Submissions", value=f"**{total_submitted}** images", inline=True)
+        embed.add_field(name="Vetoed", value=f"**{total_vetoed}** images", inline=True)
+        embed.add_field(name="Currently Live", value=f"**{live_count}** artworks", inline=True)
+        embed.add_field(name="Archived/Past", value=f"**{archived_count}** artworks", inline=True)
 
-    await interaction.followup.send(embed=embed)
+        await interaction.followup.send(embed=embed, ephemeral=True)
+    except Exception as e:
+        print(f"[my_stats] error: {e}")
+        traceback.print_exc()
+        await interaction.followup.send(f"Error fetching stats: {e}", ephemeral=True)
 
 # ---------------- Reaction Handling ----------------
 @bot.event
