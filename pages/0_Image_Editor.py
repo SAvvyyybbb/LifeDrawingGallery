@@ -145,14 +145,21 @@ if st.session_state.editor_mode == "grid":
             thumb = get_thumbnail(row['storage_key_raw'])
             if thumb:
                 st.image(thumb, width='stretch')
-                
+
                 label = f"[{idx+1}] {row['original_filename'][:15]}..."
                 if row['needs_crop']: label = "⚠️ " + label
-                
-                if st.button(label, key=f"sel_{idx}", width='stretch'):
-                    st.session_state.selected_idx = idx
-                    st.session_state.editor_mode = "edit"
-                    st.rerun()
+
+                col_open, col_veto = st.columns([4, 1])
+                with col_open:
+                    if st.button(label, key=f"sel_{idx}", width='stretch'):
+                        st.session_state.selected_idx = idx
+                        st.session_state.editor_mode = "edit"
+                        st.rerun()
+                with col_veto:
+                    if st.button("🚫", key=f"veto_{idx}", width='stretch', help="Veto (mark as not art)"):
+                        cursor.execute("UPDATE raw_image_data SET veto = 1 WHERE hash = %s", (row['hash'],))
+                        conn.commit()
+                        st.rerun()
                 st.caption(f"Channel: {row['content_category'] or '?'}")
             else:
                 st.error("Error")
