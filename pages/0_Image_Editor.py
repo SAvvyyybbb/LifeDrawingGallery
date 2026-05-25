@@ -253,7 +253,17 @@ else:
             st.write("### 🛠️ Controls")
             angle = st.slider("🔄 Rotate (degrees)", -180, 180, 0, 1)
             ratio_choice = st.selectbox("📐 Aspect Ratio Guide", ["None","Square","Portrait","Landscape","Extra Tall","Extra Wide"])
-            aspect_map = {"None": None, "Square": (1,1), "Portrait": (3,5), "Landscape": (3,2), "Extra Tall": (1,2), "Extra Wide": (2,1)}
+            # Crop ratios MUST match the output tile sizes in process_stage1.py (sizes dict)
+            # and 1_Batch_Manager.py compute_tile_size, otherwise the crop is distorted on
+            # resize. Use the exact pixel dimensions so the guide can never drift from them.
+            aspect_map = {
+                "None": None,
+                "Square": (512, 512),
+                "Portrait": (512, 717),
+                "Landscape": (717, 512),
+                "Extra Tall": (512, 1024),
+                "Extra Wide": (1024, 512),
+            }
             
             st.divider()
 
