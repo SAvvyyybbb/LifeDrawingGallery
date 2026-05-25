@@ -117,7 +117,40 @@ if not db_images:
 if st.session_state.editor_mode == "grid":
     st.title("🖼️ Image Triage")
     st.write(f"Showing {len(db_images)} pending images. Flagged items (⚠️) are surfaced first.")
-    
+
+    # ---------------- Stage 1: clean pending raws into the batching pool ----------------
+    cursor.execute("""
+        SELECT COUNT(*) AS c FROM raw_image_data
+        WHERE processing = 0 AND veto = 0 AND storage_key_raw IS NOT NULL
+    """)
+    pending_raw = cursor.fetchone()['c']
+    if pending_raw > 0:
+        with st.container(border=True):
+            st.markdown(
+                f"**⚙️ Stage 1 — Clean Images:** {pending_raw} image(s) are ready to be "
+                "auto-cropped, resized, and uploaded as cleaned images for batching. "
+                "Images with no detectable border get flagged here for manual crop instead."
+            )
+            if st.button(f"⚙️ Run Stage 1 (Clean Pending Images) Now ({pending_raw})",
+                         type="primary", key="run_stage1_editor"):
+                from process_stage1 import run_processing
+                progress = st.progress(0.0, text="Starting Stage 1…")
+                def _update(done, total, filename):
+                    progress.progress(done / total, text=f"Processing {done}/{total}: {filename}")
+                with st.spinner("Running Stage 1 — this may take a while for large queues."):
+                    result = run_processing(progress_callback=_update)
+                progress.empty()
+                st.success(
+                    f"Stage 1 complete: {result['success']} cleaned, "
+                    f"{result['skipped_duplicates']} duplicates skipped, "
+                    f"{len(result['failed'])} failed."
+                )
+                if result['failed']:
+                    with st.expander("Show failed images"):
+                        for f in result['failed']:
+                            st.write(f"- {f}")
+                st.rerun()
+
     THUMBS_PER_PAGE = 48
     NUM_COLS = 6
     total_pages = math.ceil(len(db_images) / THUMBS_PER_PAGE)
