@@ -102,6 +102,19 @@ def save_order(img_updates):
     st.success("Order saved!")
     st.rerun()
 
+def swap_order(id_a, id_b):
+    """Swap the manual_order (tile position) of two images in the same batch."""
+    cursor.execute("SELECT id, manual_order FROM images WHERE id = ANY(%s)", ([id_a, id_b],))
+    orders = {r['id']: r['manual_order'] for r in cursor.fetchall()}
+    if id_a not in orders or id_b not in orders:
+        st.error("One of the tiles no longer exists — refresh and try again.")
+        return
+    cursor.execute("UPDATE images SET manual_order = %s WHERE id = %s", (orders[id_b], id_a))
+    cursor.execute("UPDATE images SET manual_order = %s WHERE id = %s", (orders[id_a], id_b))
+    conn.commit()
+    st.success(f"Swapped positions #{orders[id_a]} ↔ #{orders[id_b]}.")
+    st.rerun()
+
 def perform_tile_replacement(batch, old_image_id, replacement_storage_key):
     cursor.execute("SELECT manual_order, aspect_category FROM images WHERE id = %s", (old_image_id,))
     old = cursor.fetchone()
@@ -221,6 +234,20 @@ with tab1:
 
                         new_order = st.number_input("Order", value=int(img_row['manual_order'] or 0), key=f"ord_{img_row['id']}", min_value=0)
                         img_updates.append((img_row['id'], new_order))
+
+                        # Swap this tile's position with another tile in the same batch
+                        others = [r for r in batch_images if r['id'] != img_row['id']]
+                        if others:
+                            with st.popover("⇄ Swap", use_container_width=True):
+                                order_by_id = {r['id']: int(r['manual_order'] or 0) for r in others}
+                                target_id = st.selectbox(
+                                    "Swap this tile with:",
+                                    options=[r['id'] for r in others],
+                                    format_func=lambda iid: f"position #{order_by_id[iid]}",
+                                    key=f"swap_sel_{img_row['id']}",
+                                )
+                                if st.button("Confirm Swap", key=f"swap_btn_{img_row['id']}", type="primary"):
+                                    swap_order(img_row['id'], target_id)
 
                 if st.button("Update Order", key=f"upd_{batch['id']}"):
                     save_order(img_updates)

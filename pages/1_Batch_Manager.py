@@ -216,50 +216,56 @@ with st.spinner("Loading data..."):
     cursor.execute("SELECT perceptual_hash FROM images WHERE batch_id IS NOT NULL")
     existing_phashes = set(r['perceptual_hash'] for r in cursor.fetchall())
 
-if not unbatched_images:
-    # Count raw images waiting for Stage 1 so we can hint at whether the button
-    # will actually do anything before the user clicks.
-    cursor.execute("""
-        SELECT COUNT(*) AS c FROM raw_image_data
-        WHERE processing = 0 AND veto = 0 AND storage_key_raw IS NOT NULL
-    """)
-    pending_raw = cursor.fetchone()['c']
+# ---------------- Stage 1 Runner: clean pending raw images ----------------
+# Count raw images still waiting for Stage 1. Checked regardless of whether the pool
+# already has cleaned images — pending raws should always be cleanable so they get
+# accounted for when batches are set up, not hidden just because the pool is non-empty.
+cursor.execute("""
+    SELECT COUNT(*) AS c FROM raw_image_data
+    WHERE processing = 0 AND veto = 0 AND storage_key_raw IS NOT NULL
+""")
+pending_raw = cursor.fetchone()['c']
 
-    if pending_raw > 0:
-        st.info(
-            f"No cleaned images in the batching pool yet, but **{pending_raw} raw image(s)** "
-            "are waiting for Stage 1 (Pre-Processing). Click below to run it now."
-        )
-    else:
+def run_stage1_now():
+    from process_stage1 import run_processing
+    progress = st.progress(0.0, text="Starting Stage 1…")
+    def _update(done, total, filename):
+        progress.progress(done / total, text=f"Processing {done}/{total}: {filename}")
+    with st.spinner("Running Stage 1 — this may take a while for large queues."):
+        result = run_processing(progress_callback=_update)
+    progress.empty()
+    st.success(
+        f"Stage 1 complete: {result['success']} processed, "
+        f"{result['skipped_duplicates']} duplicates skipped, "
+        f"{len(result['failed'])} failed."
+    )
+    if result['failed']:
+        with st.expander("Show failed images"):
+            for f in result['failed']:
+                st.write(f"- {f}")
+    st.rerun()
+
+if pending_raw > 0:
+    st.warning(
+        f"⚙️ **{pending_raw} raw image(s)** are waiting to be cleaned (Stage 1). "
+        "Run it to clean them into the batching pool so they're accounted for when you group batches."
+    )
+    if st.button(
+        f"⚙️ Run Stage 1 (Clean Pending Images) Now ({pending_raw} image(s))",
+        type="primary",
+        key="run_stage1_btn",
+    ):
+        run_stage1_now()
+
+if not unbatched_images:
+    if pending_raw == 0:
         st.success(
             "No cleaned images in the batching pool and no raw images waiting. "
             "Scrape some new images from Discord, or check the Image Editor for items "
             "needing manual crop."
         )
-
-    if st.button(
-        f"⚙️ Run Stage 1 (Pre-Processing) Now" + (f" ({pending_raw} image(s))" if pending_raw else ""),
-        type="primary",
-        disabled=(pending_raw == 0),
-    ):
-        from process_stage1 import run_processing
-        progress = st.progress(0.0, text="Starting Stage 1…")
-        def _update(done, total, filename):
-            progress.progress(done / total, text=f"Processing {done}/{total}: {filename}")
-        with st.spinner("Running Stage 1 — this may take a while for large queues."):
-            result = run_processing(progress_callback=_update)
-        progress.empty()
-        st.success(
-            f"Stage 1 complete: {result['success']} processed, "
-            f"{result['skipped_duplicates']} duplicates skipped, "
-            f"{len(result['failed'])} failed."
-        )
-        if result['failed']:
-            with st.expander("Show failed images"):
-                for f in result['failed']:
-                    st.write(f"- {f}")
-        st.rerun()
-
+    else:
+        st.info("Click **Run Stage 1** above to clean the pending raw images into the batching pool.")
     st.stop()
 
 st.write(f"**Found {len(unbatched_images)} images ready for batching.**")
