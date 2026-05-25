@@ -81,18 +81,33 @@ IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 target = st.session_state.get("target_edit_hash")
 
+# Images stay visible here until their batch has been STITCHED (status stitched/
+# validated/deployed/archived). Cleaned-but-unstitched images still show; unbatching
+# clears batch membership so they automatically reappear.
+STITCHED_FILTER = """
+    NOT EXISTS (
+        SELECT 1 FROM processed_image_data p
+        JOIN images i ON i.file_path = p.storage_key_processed
+        JOIN batches b ON i.batch_id = b.id
+        WHERE p.original_hash = raw_image_data.hash
+          AND b.status IN ('stitched', 'validated', 'deployed', 'archived')
+    )
+"""
+
 if target:
-    cursor.execute("""
+    cursor.execute(f"""
         SELECT hash, storage_key_raw, content_category, original_filename, needs_crop, channel_id, created_at
-        FROM raw_image_data 
-        WHERE (processing = 0 OR hash = %s) AND veto = 0 AND storage_key_raw IS NOT NULL
+        FROM raw_image_data
+        WHERE veto = 0 AND storage_key_raw IS NOT NULL
+          AND (hash = %s OR {STITCHED_FILTER})
         ORDER BY CASE WHEN hash = %s THEN 1 ELSE 0 END DESC, needs_crop DESC, created_at DESC
     """, (target, target))
 else:
-    cursor.execute("""
+    cursor.execute(f"""
         SELECT hash, storage_key_raw, content_category, original_filename, needs_crop, channel_id, created_at
-        FROM raw_image_data 
-        WHERE processing = 0 AND veto = 0 AND storage_key_raw IS NOT NULL
+        FROM raw_image_data
+        WHERE veto = 0 AND storage_key_raw IS NOT NULL
+          AND {STITCHED_FILTER}
         ORDER BY needs_crop DESC, created_at DESC
     """)
     
@@ -109,14 +124,14 @@ if target and db_images:
 
 if not db_images:
     st.title("🖼️ Image Editor")
-    st.info("No unprocessed images found. Everything is clean!")
+    st.info("No images to edit — everything has been stitched into a batch.")
     st.stop()
 
 
 # ---------------- Grid View ----------------
 if st.session_state.editor_mode == "grid":
     st.title("🖼️ Image Triage")
-    st.write(f"Showing {len(db_images)} pending images. Flagged items (⚠️) are surfaced first.")
+    st.write(f"Showing {len(db_images)} images (cleaned images stay here until their batch is stitched). Flagged items (⚠️) are surfaced first.")
 
     # ---------------- Stage 1: clean pending raws into the batching pool ----------------
     cursor.execute("""
