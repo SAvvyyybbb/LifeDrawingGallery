@@ -58,7 +58,9 @@ if not TOKEN:
 
 # ---------------- Image Processing Constants ----------------
 OUTPUT_SIZE = 2048
-TOLERANCE = 5
+# Pixels with all RGB channels <= TOLERANCE are treated as black border during
+# Stage 1 cleanup. Bumped from 5 to catch dark-gray / JPEG-compressed borders.
+TOLERANCE = 12
 ASPECT_CATEGORIES = ["Extra Tall", "Portrait", "Square", "Landscape", "Extra Wide"]
 
 ASPECT_CODES = {

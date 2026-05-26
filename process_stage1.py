@@ -21,6 +21,33 @@ PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
+def trim_black_border(arr, tol, line_frac=0.85):
+    """Return a content box (x0, y0, x1, y1) after trimming near-black borders.
+
+    Trims contiguous rows/columns inward from each edge where at least
+    ``line_frac`` of the pixels are near-black (all channels <= ``tol``). Unlike
+    a min/max bounding box of non-black pixels, this is robust to a few stray
+    bright pixels in the border (signatures, JPEG noise, specks) that would
+    otherwise defeat the crop entirely.
+    """
+    dark = np.all(arr <= tol, axis=-1)
+    row_dark = dark.mean(axis=1)
+    col_dark = dark.mean(axis=0)
+
+    def trim(profile):
+        n = len(profile)
+        lo = 0
+        while lo < n and profile[lo] >= line_frac:
+            lo += 1
+        hi = n
+        while hi > lo and profile[hi - 1] >= line_frac:
+            hi -= 1
+        return lo, hi
+
+    y0, y1 = trim(row_dark)
+    x0, x1 = trim(col_dark)
+    return int(x0), int(y0), int(x1), int(y1)
+
 def is_duplicate(cursor, original_hash, phash):
     cursor.execute("""
         SELECT 1 FROM processed_image_data
@@ -98,23 +125,21 @@ def run_processing(progress_callback=None):
 
             if image.mode == 'RGBA': image = image.convert('RGB')
             arr = np.array(image)
-            mask = np.all(arr > TOLERANCE, axis=-1)
-            coords = np.argwhere(mask)
 
-            if coords.size == 0:
-                print(f"  Empty image (all black?) after mask: {filename}")
+            # Trim near-black borders by edge profile (robust to stray bright pixels).
+            x0, y0, x1, y1 = trim_black_border(arr, TOLERANCE)
+
+            if x1 <= x0 or y1 <= y0:
+                print(f"  Empty image (all black?) after border trim: {filename}")
                 failed.append(filename)
                 continue
 
-            y0, x0 = coords.min(axis=0)
-            y1, x1 = coords.max(axis=0) + 1
-            
-            # If the crop area is basically the whole image, no black border was found.
+            # If almost nothing was trimmed, no meaningful black border was found.
             # Skip re-flagging if the user already manually cropped it — trust their edit.
-            if (x1-x0 >= image.width*0.95 and y1-y0 >= image.height*0.95):
+            if (x1-x0 >= image.width*0.98 and y1-y0 >= image.height*0.98):
                 if was_manually_cropped:
                     print(f"  No border found but manually cropped — proceeding as-is: {filename}")
-                    y0, x0, y1, x1 = 0, 0, image.height, image.width
+                    x0, y0, x1, y1 = 0, 0, image.width, image.height
                 else:
                     print(f"  No significant black border found, flagging for manual crop: {filename}")
                     cursor.execute("UPDATE raw_image_data SET needs_crop=1 WHERE hash=%s", (original_hash,))
